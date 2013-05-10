@@ -5,6 +5,18 @@ import board
 import move
 import utility
 
+def get_pieces_from_file(filename):
+    pieces = []
+    with open(filename) as f:
+        for line in f:
+            for char in line:
+                if char.isdigit():
+                    pieces.append(int(char))
+                else:
+                    # skip rest of this line
+                    break
+    return pieces
+
 def get_best_move(board, pieces, utility_function):
     best_move = None
     best_utility = -100000
@@ -40,4 +52,8 @@ pieces = (3, 4, 5, 6, 7)
 m = get_best_move(b, pieces, utility.utility_function_a)
 b.apply_move(m)
 b.print_grid()
+
+print("-------------------")
+
+p = get_pieces_from_file("exampleinput.txt")
 
