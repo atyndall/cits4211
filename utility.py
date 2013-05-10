@@ -47,5 +47,3 @@ def test():
     b.apply_move(move.Move(1, 1, 2))
     b.print_grid()
     print(utility_function_a(b))
-
-test()

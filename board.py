@@ -1,5 +1,7 @@
 import sys
-import move 
+import copy
+
+import move
 
 # Defines the tetris game environment.
 # Stores the game board using _grid, which contains a 2d list.
@@ -15,6 +17,9 @@ class Board:
     def __init__(self, width):
         self._width = width
         self._grid = []
+
+    def copy(self):
+        return copy.deepcopy(self)
 
     def get_width(self):
         return self._width
@@ -69,16 +74,16 @@ class Board:
     # Checks if the piece can be placed on the board with its column.
     # Changes the column to a valid one if it can.
     # Returns True if afterwards, the piece can be placed on the wall.
-    def validate_move_column(self, move):
+    def move_column_valid(self, move):
         if move.get_column() < 0:
             return false
         # if the piece goes past the right wall
         if move.get_column() + move.get_width() > self._width:
-            new_value = move.set_column(self._width - move.get_width())
+            new_value = self._width - move.get_width()
             # if the board width is so low the piece still doesn't fit
-            if newValue < 0:
+            if new_value < 0:
                 return false
-            move.set_column(newValue)
+            move.set_column(new_value)
         return True
 
     # Helper function for apply_move
@@ -100,7 +105,7 @@ class Board:
                                      move.get_column() + column)
 
     def apply_move(self, move):
-        if not self.validate_move_column(move):
+        if not self.move_column_valid(move):
             raise Exception("Move column not valid, unable to get valid value")
         # Loops from top row to the bottom row until a row with a collision
         # is found. The piece is then placed on the row it. If no such row
@@ -112,6 +117,12 @@ class Board:
                 return
         self.place_piece_at_row(move, 0)
         self.remove_full_lines()
+
+    # makes a copy of the board, applies the move to it, then returns the copy
+    def apply_move_copy(self, move):
+        cp = self.copy()
+        cp.apply_move(move)
+        return cp
 
     def print_grid(self):
         for row in reversed(self._grid):
@@ -125,28 +136,8 @@ class Board:
             sys.stdout.write("\n")
         sys.stdout.write("\n")
 
-    # The old apply_move function. Kept for nostalgic reasons
-    def old_apply_move(self, move):
-        if not self.validate_move_column(move):
-            raise Exception("Move not valid")
-        # Loops through all the rows until a rows where the piece can be
-        # placed is found 
-        for grid_row in range(0, self.get_num_rows() + 1):
-            can_place = True;
-            for row in range(0, move.get_height()):
-                for column in range (0, move.get_width()):
-                    if move.block_at(row, column) and \
-                        self.block_at(grid_row + row,
-                                      column + move.get_column()):
-                        can_place = False;
-            if can_place:
-                for row in range(0, move.get_height()):
-                    for column in range (0, move.get_width()):
-                        if move.block_at(row, column):
-                            self.place_block(grid_row + row,
-                                          column + move.get_column())
-                break;
-            # end if can_place
+    
+
 def test():
     b = Board(11)
     b.apply_move(move.Move(1, 1, 0))
