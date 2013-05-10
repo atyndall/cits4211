@@ -7,7 +7,7 @@ import utility
 
 def get_pieces_from_file(filename):
     pieces = []
-    with open(filename) as f:
+    with open(filename, "r") as f:
         for line in f:
             for char in line:
                 if char.isdigit():
@@ -16,6 +16,12 @@ def get_pieces_from_file(filename):
                     # skip rest of this line
                     break
     return pieces
+
+def write_solution_to_file(solution, filename):
+    with open(filename, "w") as f:
+        for m in solution:
+            f.write("{0} {1} {2}\n".format(m.get_piece(), m.get_rotation(),
+                                      m.get_column()))
 
 def get_best_move(board, pieces, utility_function):
     best_move = None
@@ -57,3 +63,5 @@ print("-------------------")
 
 p = get_pieces_from_file("exampleinput.txt")
 
+solution = [move.Move(1, 1, 0), move.Move(3, 0, 2), move.Move(5, 1, 4)]
+write_solution_to_file(solution, "output.txt")
