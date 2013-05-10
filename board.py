@@ -46,6 +46,15 @@ class Board:
         else:
             return False
 
+    def on_board(self, row, column):
+        return row >= 0 and column >= 0 and column < self._width
+
+    def is_wall(self, column):
+        return column == -1 or column == self._width
+
+    def is_floor(self, row):
+        return row == -1
+
     def append_row(self):
         self._grid.append([False]*self._width)
 

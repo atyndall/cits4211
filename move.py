@@ -106,8 +106,8 @@ def print_all_representations():
         for i in range(1, 8):
             for j in range(0, 4):
                 Move(i, j, 0).print_representation()
-                print ""
-            print "--------------------------"
+                sys.stdout.write("\n")
+            sys.stdout.write("--------------------------\n") 
 
 def test():
     print_all_representations()
