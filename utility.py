@@ -1,3 +1,5 @@
+# This file contains the utility functions used by the program
+
 import board
 import move
 

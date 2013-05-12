@@ -11,7 +11,9 @@ def get_pieces_from_file(filename):
         for line in f:
             for char in line:
                 if char.isdigit():
-                    pieces.append(int(char))
+                    digit = int(char)
+                    if digit >= 0 and digit <= 7:
+                        pieces.append(digit)
                 else:
                     # skip rest of this line
                     break
@@ -38,30 +40,44 @@ def get_best_move(board, pieces, utility_function):
                         best_utility = utility
     return best_move
 
-
-b = board.Board(11)
-b.apply_move(move.Move(1, 1, 0))
-c = copy.deepcopy(b)
-b.apply_move(move.Move(1, 1, 0))
-b.print_grid()
-c.print_grid()
-
-print("-------------------")
-
-pieces = (2, 3, 4, 5, 6, 7)
-b = board.Board(11)
-m = get_best_move(b, pieces, utility.utility_function_a)
-b.apply_move(m)
-b.print_grid()
-
-pieces = (3, 4, 5, 6, 7)
-m = get_best_move(b, pieces, utility.utility_function_a)
-b.apply_move(m)
-b.print_grid()
-
-print("-------------------")
-
-p = get_pieces_from_file("exampleinput.txt")
-
-solution = [move.Move(1, 1, 0), move.Move(3, 0, 2), move.Move(5, 1, 4)]
-write_solution_to_file(solution, "output.txt")
+def get_solution(input_file, width, buffer_size, utility_function, visualise):
+    pieces = get_pieces_from_file(input_file)
+    # builds the buffer
+    buffer_size += 1
+    piece_buffer = []
+    if len(pieces) <= buffer_size:
+        piece_buffer = pieces
+        pieces = []
+    else:
+        piece_buffer = pieces[0:buffer_size]
+        pieces = pieces[buffer_size:len(pieces)]
+    #
+    b = board.Board(width)
+    #
+    solution = []
+    # empty sequences are false
+    while piece_buffer:
+        best_move = get_best_move(b, piece_buffer, utility_function)
+        if visualise:
+            print("best move:")
+            best_move.print_rep_with_column()
+            print("board before move:")
+            b.print_grid()
+            pass
+        b.apply_move(best_move)
+        if visualise:
+            print("grid after move:")
+            b.print_grid()
+            print("-" * 20)
+            pass
+        solution.append(best_move)
+        piece_buffer.remove(best_move.get_piece())
+        if pieces:
+            piece_buffer.append(pieces.pop(0))
+    return solution
+        
+        
+    
+def test():
+    s = get_solution("exampleinput.txt", 11, 1, utility.utility_function_a,
+                     True)

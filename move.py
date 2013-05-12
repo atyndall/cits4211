@@ -81,6 +81,18 @@ class Move:
                 sys.stdout.write("|")
             sys.stdout.write("\n")
 
+    def print_rep_with_column(self):
+        for row in reversed(self._representation):
+            sys.stdout.write("|")
+            sys.stdout.write(" |" * self._column)
+            for column in row:
+                if column:
+                    sys.stdout.write("X")
+                else:
+                    sys.stdout.write(" ")
+                sys.stdout.write("|")
+            sys.stdout.write("\n")
+
     def get_width(self):
         return len(self._representation[0])
 
@@ -111,3 +123,5 @@ def print_all_representations():
 
 def test():
     print_all_representations()
+    print("")
+    Move(1, 1, 5).print_rep_with_column()
