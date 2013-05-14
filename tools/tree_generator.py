@@ -26,7 +26,8 @@ class OrientedPiece(NonHashPiece):
 # 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares.
 def print_board(a):
   for row in a:
-    print(''.join([unichr(9632) if e else unichr(9633) for e in row]))
+    #print(''.join([unichr(9632) if e else unichr(9633) for e in row]))
+    print(''.join(['#' if e else '0' for e in row]))
 
 #
 #   |
@@ -134,24 +135,48 @@ def possible(p, a):
   
   return True
 
+def removearray(L, arr):
+  ind = 0
+  size = len(L)
+  while ind != size and not np.array_equal(L[ind],arr):
+      ind += 1
+  if ind != size:
+      L.pop(ind)
+  else:
+      raise ValueError('array not found in list.')
+  
 # Calculate every possible position a piece can have on a WIDTH*HEIGHT grid
 def calculate_possibilities():  
   print 'Computing all possible orientations and positions of given tetrominoes on %dx%d grid.' % (WIDTH, HEIGHT)
   possibilities = []
   for n, p in pieces.items():
+    options = []
     p_width = len(p[0])
     p_height = len(p)
 
     # Calculate the number of rotations a piece requires, default 3 (all)
     nrot = 4
-    #if rall(p):
-    #  if p_width == p_height: # Piece is square, no rotation needed
-    #    nrot = 1
-    #  else: # Piece is rectangular, one rotation needed
-    #    nrot = 2
-
+    if rall(p):
+      if p_width == p_height: # Piece is square, no rotation needed
+        nrot = 1
+      else: # Piece is rectangular, one rotation needed
+        nrot = 2
+  
+    # Add all rotations to an options list
     for r in range(nrot):
       p = np.rot90(p, r)
+      
+      # Remove duplicate rotations
+      already = False
+      for p2, r2 in options:
+        if np.array_equal(p, p2):
+          already = True
+       
+      if not already:
+        options.append((p, r))
+     
+    # Create all combinations
+    for p, r in options:   
       for h in range(HEIGHT):
         for w in range(WIDTH):
           try:
