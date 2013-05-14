@@ -219,6 +219,8 @@ def calculate_possible(positions):
     pickle.dump(combinations, open(args.out_p,'wb'))
     print "Output saved to '%s'." % args.out_p
     
+  calculate_valid(combinations)
+    
 # Check validity
 def check_validity(pieces):
   board = np.zeros((HEIGHT, WIDTH), np.bool)
