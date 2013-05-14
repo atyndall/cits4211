@@ -182,10 +182,7 @@ def calculate_positions():
 
   lp = len(possibilities)
   print "There are %d possible orientations and positions for the given tetrominoes." % lp
-  if args.out_p:
-    pickle.dump(possibilities, open(args.out_p,'wb'))
-    print "Output saved to '%s'." % args.out_p
-  
+
   calculate_possible(possibilities)
  
 # Check possibility
@@ -218,7 +215,7 @@ def calculate_possible(positions):
     
   lc = len(combinations)   
   print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES, search_space)
-  if args.out_c:
+  if args.out_p:
     pickle.dump(combinations, open(args.out_p,'wb'))
     print "Output saved to '%s'." % args.out_p
     
@@ -252,7 +249,7 @@ def calculate_valid(possibilities):
     
   lc = len(combinations)   
   print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES, search_space)
-  if args.out_c:
+  if args.out_v:
     pickle.dump(combinations, open(args.out_v,'wb'))
     print "Output saved to '%s'." % args.out_v
   
