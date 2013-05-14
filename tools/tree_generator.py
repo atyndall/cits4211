@@ -122,16 +122,6 @@ def possible(p, a):
   land = np.logical_and(p, a)
   if np.any(land):
     return False
-    
-  # See if the piece is being placed in mid-air 
-  hover = np.logical_and( p, adjacent(a) )
-  if not np.any(hover):
-    return False
-    
-  # See if the piece can be placed when dropped vertically
-  drop = np.logical_and( p, overhang(a) )
-  if np.any(drop):
-    return False
   
   return True
  
