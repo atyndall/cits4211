@@ -4,6 +4,8 @@ import sys
 import collections
 import itertools
 import argparse
+import multiprocessing
+import time
 from math import factorial
 import cPickle as pickle
 
@@ -74,15 +76,12 @@ def rall(a):
   
 # The adjacent function returns a 2D-array of all blocks that are vertically adjacent
 # to the given 2D-array "a".
-# If "floor" is set to True, the bottom row of the matrix will also be set to True.
-def adjacent(a, floor=False):
+def adjacent(a):
   HEIGHT = a.shape[0]
   WIDTH = a.shape[1]
 
   m = np.zeros((HEIGHT, WIDTH), np.bool)
-  
-  if floor:
-    m[-1] = True # Set bottom row
+  m[-1] = True # Set bottom row
   
   # Set edge values
   for x in range(HEIGHT):
@@ -99,20 +98,40 @@ def adjacent(a, floor=False):
         m[x+1:, y] = False
     
   return m
-
-# The simulate_drop function will transform "piece" from where it sits as an overlay
-# on "board" to see if it collides with anything on "board".  
-def simulate_drop(board, piece):
-  a = get_piece(piece.type, piece.rotation)
-  for h in range(piece.h, HEIGHT):
-    try:
-      off = offset(a, h, piece.w)
-      r = np.logical_or(board, off)
-      if np.any(r):
-        return False
-    except ValueError:
-      pass
-      
+  
+# The overhang function returns a 2D-array of all blocks that are empty space, but
+# have a piece above them.
+def overhang(a):
+  HEIGHT = a.shape[0]
+  WIDTH = a.shape[1]
+  
+  m = np.zeros((HEIGHT, WIDTH), np.bool)
+  
+  for y in range(WIDTH):
+    for x in range(1, HEIGHT):
+      if a[x-1, y] and not a[x, y]:
+        m[x, y] = True
+        
+  return m
+  
+# The possible function returns a value indicating if a piece placement "p" on a given
+# Tetris grid "a" would be permissable.
+def possible(p, a):
+  # See if the pieces clash
+  land = np.logical_and(p, a)
+  if np.any(land):
+    return False
+    
+  # See if the piece is being placed in mid-air 
+  hover = np.logical_and( p, adjacent(a) )
+  if not np.any(hover):
+    return False
+    
+  # See if the piece can be placed when dropped vertically
+  drop = np.logical_and( p, overhang(a) )
+  if np.any(drop):
+    return False
+  
   return True
 
 # Calculate every possible position a piece can have on a WIDTH*HEIGHT grid
@@ -125,11 +144,11 @@ def calculate_possibilities():
 
     # Calculate the number of rotations a piece requires, default 3 (all)
     nrot = 4
-    if rall(p):
-      if p_width == p_height: # Piece is square, no rotation needed
-        nrot = 1
-      else: # Piece is rectangular, one rotation needed
-        nrot = 2
+    #if rall(p):
+    #  if p_width == p_height: # Piece is square, no rotation needed
+    #    nrot = 1
+    #  else: # Piece is rectangular, one rotation needed
+    #    nrot = 2
 
     for r in range(nrot):
       p = np.rot90(p, r)
@@ -149,101 +168,39 @@ def calculate_possibilities():
   
   calculate_combinations(possibilities)
  
+# Check possibility
+def check_possibility(pieces):
+  board = np.zeros((HEIGHT, WIDTH), np.bool)
+  pos = True
+  for p in pieces:
+    if possible(p.data, board):
+      board = np.logical_or(p.data, board)
+    else:
+      pos = False
+      
+  if pos:
+    return pieces
+ 
 # We permute over all possible combinations and rotations of pieces to see which
 # successfully fit together.
 def calculate_combinations(possibilities): 
   lp = len(possibilities)
-  print "Calculating valid combinations of tetrominoes from all placements."
   v_search_space = factorial(lp) / ( factorial(lp-PIECES) * factorial(PIECES) )
-  combinations = []
-  i = 0
-  for i, en in enumerate( itertools.combinations(possibilities, PIECES) ):
-    a, b, c, d = en
-    first = np.logical_and(a.data, b.data)
-    
-    # If there is no tetromino collision, the result of the logical AND should be a completely
-    # False 2D-array
-    if not np.any(first):
-      ab = np.logical_or(a.data, b.data)
-      second = np.logical_and(ab, c.data)
-      
-      if not np.any(second):
-        abc = np.logical_or(ab, c.data)
-        third = np.logical_and(abc, d.data)
-        
-        if not np.any(third):
-          combinations.append((a,b,c,d))     
+  
+  print "Calculating valid combinations of tetrominoes from all placements (out of possible %d)." % v_search_space
 
-    if i % (v_search_space/250) == 0 and i != 0: # Output a message every now and then with progress
+  combinations = []
+  pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
+  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(possibilities, PIECES)), v_search_space/500 ):
+    if res: combinations.append(res)
+    if i % (v_search_space/500) == 0 and i != 0:
       print "Searched %d/%d placements (%.1f%% complete)" % (i, v_search_space, (i/float(v_search_space))*100)
-     
+    
   lc = len(combinations)   
   print "There are %d valid combinations of %d tetrominoes within the %d possibilities." % (lc, PIECES, v_search_space)
   if args.out_c:
     pickle.dump(combinations, open(args.out_c,'wb'))
     print "Output saved to '%s'." % args.out_c
-  
-  calculate_pcombinations(combinations)
-
-# We must exclude combinations that are not possible when "dropping" the pieces from above.
-def calculate_pcombinations(combinations):
-  print "Calculating possible orders of placement and excluding impossible orderings."
-
-  lc = len(combinations) 
-  p_search_space = factorial(lc) / factorial(lc-PIECES)
-  pcombinations = []
-  for combination in combinations:
-    for pieces in itertools.permutations(combination):
-      board = np.zeros((HEIGHT,WIDTH), np.bool)
-      for piece in pieces:
-        if simulate_drop(board, piece):
-          board = np.logical_and(board, piece.data)
-        else:
-          continue
-      
-      for p in pieces:
-        print_board(p.data)
-        print
-      print '---'
-      
-      pcombinations.append(pieces)
-       
-      # # print_board(a.data)
-      # # print
-      # # print_board(b.data)
-      # # print
-      # # print_board(adjacent(a.data, floor=True))
-      # # print
-      # # print_board(np.logical_and(b.data, adjacent(a.data, floor=True)))
-      # # print '--'
-      
-      # # TODO: adjacent currently cannot handle some edge cases
-      
-      # # If b does not sit on a or the floor
-      # first = np.logical_and(b.data, adjacent(a.data, floor=True))
-      # if not np.any(first):
-        # continue
-        
-      # # If c does not sit on a, b or the floor
-      # ab = np.logical_or(a.data, b.data)
-      # second = np.logical_and(c.data, adjacent(ab, floor=True))
-      # if not np.any(second):
-        # continue
-      
-      # # If d does not sit a, b, c or the floor
-      # abc = np.logical_or(ab, c.data)
-      # third = np.logical_and(d.data, adjacent(abc, floor=True))
-      # if not np.any(third):
-        # continue
-        
-      # If we're still here, that means we've got a valid placement
-      #pcombinations.append((a,b,c,d))
-      
-  lpc = len(pcombinations)
-  print "There are %d valid combinations of %d tetrominoes within the %d possibilities." % (lpc, PIECES, lc) 
-  if args.out_pc:
-    pickle.dump(pcombinations, open(args.out_pc,'wb'))
-    print "Output saved to '%s'." % args.out_pc
   
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
@@ -251,36 +208,35 @@ if __name__ == "__main__":
   )
 
   parser.add_argument('--width', metavar='WIDTH', type=int,
-    default=4, help='width of Tetris grid')
+    default=WIDTH, help='width of Tetris grid')
   parser.add_argument('--height', metavar='HEIGHT', type=int,
-  default=4, help='height of Tetris grid')
+    default=HEIGHT, help='height of Tetris grid')
 
   pin = parser.add_mutually_exclusive_group()
   pin.add_argument('--in-p', metavar='IN_P', type=str,
     help='import possibilities and resume program')
   pin.add_argument('--in-c', metavar='IN_C', type=str,
     help='import combinations and resume program')
-  pin.add_argument('--in-pc', metavar='IN_PC', type=str,
-    help='import possible combinations and resume program')
 
   pout = parser.add_argument_group('output')
   pout.add_argument('--out-p', metavar='OUT_P', type=str,
     default='possibilities.p', help='save possibilities [default: possibilities.p]')
   pout.add_argument('--out-c', metavar='OUT_C', type=str,
     default='combinations.p', help='save combinations [default: combinations.p]')
-  pout.add_argument('--out-pc', metavar='OUT_PC', type=str,
-    default='pcombinations.p', help='save possible combinations [default: pcombinations.p]')
     
   args = parser.parse_args()
 
   WIDTH  = args.width   # Width of board
   HEIGHT = args.height  # Height of board
   
-  if args.in_pc:
-    exit('in-pc currently unimplemented')
-  elif args.in_c:
+  if args.in_c:
     c = pickle.load( open(args.in_c,'rb') )  
-    calculate_pcombinations(c)
+    for comb in c:
+      for p in comb:
+        print_board(p.data)
+        print
+      print '---'
+    #calculate_pcombinations(c)
   elif args.in_p:
     p = pickle.load( open(args.in_p,'rb') )
     calculate_combinations(p)
