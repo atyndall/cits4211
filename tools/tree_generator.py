@@ -116,7 +116,7 @@ def overhang(a):
   return m
   
 # The possible function returns a value indicating if a piece placement "p" on a given
-# Tetris grid "a" would be permissable.
+# Tetris grid "a" would be possible
 def possible(p, a):
   # See if the pieces clash
   land = np.logical_and(p, a)
@@ -134,19 +134,24 @@ def possible(p, a):
     return False
   
   return True
-
-def removearray(L, arr):
-  ind = 0
-  size = len(L)
-  while ind != size and not np.array_equal(L[ind],arr):
-      ind += 1
-  if ind != size:
-      L.pop(ind)
-  else:
-      raise ValueError('array not found in list.')
+ 
+# The possible function returns a value indicating if a piece placement "p" on a given
+# Tetris grid "a" would be valid
+def valid(p, a):
+  # See if the piece is being placed in mid-air 
+  hover = np.logical_and( p, adjacent(a) )
+  if not np.any(hover):
+    return False
+    
+  # See if the piece can be placed when dropped vertically
+  drop = np.logical_and( p, overhang(a) )
+  if np.any(drop):
+    return False
+    
+  return True
   
 # Calculate every possible position a piece can have on a WIDTH*HEIGHT grid
-def calculate_possibilities():  
+def calculate_positions():  
   print 'Computing all possible orientations and positions of given tetrominoes on %dx%d grid.' % (WIDTH, HEIGHT)
   possibilities = []
   for n, p in pieces.items():
@@ -191,7 +196,7 @@ def calculate_possibilities():
     pickle.dump(possibilities, open(args.out_p,'wb'))
     print "Output saved to '%s'." % args.out_p
   
-  calculate_combinations(possibilities)
+  calculate_possible(possibilities)
  
 # Check possibility
 def check_possibility(pieces):
@@ -206,26 +211,60 @@ def check_possibility(pieces):
   if pos:
     return pieces
  
-# We permute over all possible combinations and rotations of pieces to see which
+# We combine all existing combinations and rotations of pieces to see which
 # successfully fit together.
-def calculate_combinations(possibilities): 
-  lp = len(possibilities)
-  v_search_space = factorial(lp) / ( factorial(lp-PIECES) * factorial(PIECES) )
+def calculate_possible(positions): 
+  lp = len(positions)
+  search_space = factorial(lp) / ( factorial(lp-PIECES) * factorial(PIECES) )
   
-  print "Calculating valid combinations of tetrominoes from all placements (out of possible %d)." % v_search_space
+  print "Calculating possible combinations of tetrominoes from all placements (%d combinations)." % search_space
 
   combinations = []
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
-  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(possibilities, PIECES)), v_search_space/500 ):
+  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES)), search_space/500 ):
     if res: combinations.append(res)
-    if i % (v_search_space/500) == 0 and i != 0:
-      print "Searched %d/%d placements (%.1f%% complete)" % (i, v_search_space, (i/float(v_search_space))*100)
+    if i % (search_space/500) == 0 and i != 0:
+      print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
     
   lc = len(combinations)   
-  print "There are %d valid combinations of %d tetrominoes within the %d possibilities." % (lc, PIECES, v_search_space)
+  print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES, search_space)
   if args.out_c:
-    pickle.dump(combinations, open(args.out_c,'wb'))
-    print "Output saved to '%s'." % args.out_c
+    pickle.dump(combinations, open(args.out_p,'wb'))
+    print "Output saved to '%s'." % args.out_p
+    
+# Check validity
+def check_validity(pieces):
+  board = np.zeros((HEIGHT, WIDTH), np.bool)
+  pos = True
+  for p in pieces:
+    if valid(p.data, board):
+      board = np.logical_or(p.data, board)
+    else:
+      pos = False
+      
+  if pos:
+    return pieces
+    
+# We permute over all possible combinations and rotations of pieces to see which
+# are valid tetris plays.
+def calculate_valid(possibilities): 
+  lp = len(possibilities)
+  search_space = factorial(lp) / ( factorial(lp-PIECES) * factorial(PIECES) )
+  
+  print "Calculating valid permutations of tetrominoes from all possible (%d permutations)." % search_space
+
+  combinations = []
+  pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
+  for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibilities, PIECES)), search_space/500 ):
+    if res: combinations.append(res)
+    if i % (search_space/500) == 0 and i != 0:
+      print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
+    
+  lc = len(combinations)   
+  print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES, search_space)
+  if args.out_c:
+    pickle.dump(combinations, open(args.out_v,'wb'))
+    print "Output saved to '%s'." % args.out_v
   
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
@@ -240,30 +279,20 @@ if __name__ == "__main__":
   pin = parser.add_mutually_exclusive_group()
   pin.add_argument('--in-p', metavar='IN_P', type=str,
     help='import possibilities and resume program')
-  pin.add_argument('--in-c', metavar='IN_C', type=str,
-    help='import combinations and resume program')
 
   pout = parser.add_argument_group('output')
   pout.add_argument('--out-p', metavar='OUT_P', type=str,
-    default='possibilities.p', help='save possibilities [default: possibilities.p]')
-  pout.add_argument('--out-c', metavar='OUT_C', type=str,
-    default='combinations.p', help='save combinations [default: combinations.p]')
+    default='possible.p', help='save possible combinations [default: possible.p]')
+  pout.add_argument('--out-v', metavar='OUT_V', type=str,
+    default='valid.p', help='save valid permutations [default: valid.p]')
     
   args = parser.parse_args()
 
   WIDTH  = args.width   # Width of board
   HEIGHT = args.height  # Height of board
   
-  if args.in_c:
-    c = pickle.load( open(args.in_c,'rb') )  
-    for comb in c:
-      for p in comb:
-        print_board(p.data)
-        print
-      print '---'
-    #calculate_pcombinations(c)
-  elif args.in_p:
+  if args.in_p:
     p = pickle.load( open(args.in_p,'rb') )
-    calculate_combinations(p)
+    calculate_valid(p)
   else:
-    calculate_possibilities()
+    calculate_positions()
