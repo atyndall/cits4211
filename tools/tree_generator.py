@@ -20,10 +20,13 @@ args = None
 # Define a data structure to hold the piece information
 class Piece(object):
   def __init__(self, ptype, rotation, h, w):
-    object.__setattr__(self, 'ptype', ptype)
-    object.__setattr__(self, 'roation', rotation)
-    object.__setattr__(self, 'h', h)
-    object.__setattr__(self, 'w', w)
+    if ptype is None or rotation is None or h is None or w is None:
+      raise ValueError, "Required values not supplied"
+      
+    self.ptype = ptype
+    self.rotation = rotation
+    self.h = h
+    self.w = w
     
   # Generates a unique representation of the piece based on its attributes.
   # Allows sorting of pieces in an appropriate way.
@@ -39,6 +42,9 @@ class Piece(object):
     
   def __eq__(self, other):
     return self.__hash__() == other.__hash__()
+    
+  def __repr__(self):
+    return "Piece(ptype=%s, rotation=%s, h=%s, w=%s)" % (self.ptype, self.rotation, self.h, self.w)
 
 # Same as Piece data structure, except that it has a "data" attribute that contains a
 # matrix representing the piece's position on a HEIGHTxWIDTH plain.
@@ -46,18 +52,14 @@ class Piece(object):
 class DataPiece(Piece):
   def __init__(self, ptype, rotation, h, w):
     super(DataPiece, self).__init__(ptype, rotation, h, w)
-    object.__setattr__(self, 'data', offset(get_piece(ptype, rotation), h, w) )
-  
-  # Make sure data matrix is always representative of data
-  def __setattr__(self, name, value):
-    if name == 'data':
-      raise AttributeError, "Can't modify data, it is dynamically generated"
-    object.__setattr__(self, name, value)
-    object.__setattr__(self, 'data', offset(get_piece(self.ptype, self.rotation), self.h, self.w) )
+    self.data = offset(get_piece(ptype, rotation), h, w)
 
   # Returns piece without representative matrix
   def get_dataless(self):
-    return Piece(ptype=self.ptype, rotation=self.rotation, h=self.h, w=self.w)
+    return Piece(self.ptype, self.rotation, self.h, self.w)
+    
+  def __repr__(self):
+    return "DataPiece(ptype=%s, rotation=%s, h=%s, w=%s)" % (self.ptype, self.rotation, self.h, self.w)
     
 #class DecisionNode(object):
 #  def __init__(self, parent, values*):
@@ -76,6 +78,10 @@ def print_board(a):
 
     print(''.join(['#' if e else '0' for e in row])) 
 
+# Error raised when offset function cannot fit piece in
+class PieceNotFitError(ValueError):
+  pass
+    
 #
 #   |
 # ^ |
@@ -91,7 +97,7 @@ def offset(a, h, w):
   a_width = a.shape[1]
 
   if (a_height + h) > HEIGHT or (a_width + w) > WIDTH:
-    raise ValueError, "Shape with given offset cannot fit within dimensions"
+    raise PieceNotFitError, "Shape with given offset cannot fit within dimensions"
   
   rows = []
   
@@ -217,7 +223,6 @@ def calculate_positions():
       for p2, r2 in options:
         if np.array_equal(p, p2):
           already = True
-      print_board(p)
        
       if not already:
         options.append((p, r))
@@ -227,9 +232,9 @@ def calculate_positions():
       for h in range(HEIGHT):
         for w in range(WIDTH):
           try:
-            op = DataPiece(ptype=n, rotation=r, h=h, w=w)
+            op = DataPiece(n, r, h, w)
             possibilities.append(op)
-          except ValueError:
+          except PieceNotFitError:
             pass
 
   lp = len(possibilities)
@@ -246,7 +251,7 @@ def check_possibility(pieces):
     if possible(p.data, board):
       board = np.logical_or(p.data, board)
     else:
-      return None
+      return None # This seems to have improved performance by like 10000%, very suspicious, keep an eye on it
 
   return pieces
  
@@ -303,7 +308,7 @@ def calculate_valid(possibilities):
     # We permute every combination to work out the orders in which it would be valid
     for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES), search_space/20) ):
       if res:
-        combinations.append((p.get_dataless() for p in res)) # We ditch the matricies as they are now unnecessary
+        combinations.append([p.get_dataless() for p in res]) # We ditch the matricies as they are now unnecessary
         #combinations.append(res)
     if time.time() - timer > NOTIFY_INTERVAL: # If x seconds have elapsed
       print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
