@@ -160,8 +160,8 @@ class Rect:
 
     def set_points(self, pt1, pt2):
         """Reset the rectangle coordinates."""
-        (x1, y1) = pt1.as_tuple()
-        (x2, y2) = pt2.as_tuple()
+        (x1, y1) = pt1
+        (x2, y2) = pt2
         self.left = min(x1, x2)
         self.top = min(y1, y2)
         self.right = max(x1, x2)
