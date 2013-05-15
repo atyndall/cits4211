@@ -19,10 +19,10 @@ args = None
 # Define a data structure to hold the piece information
 class Piece(object):
   def __init__(self, ptype, rotation, h, w):
-    self.ptype = ptype
-    self.rotation = rotation
-    self.h = h
-    self.w = w
+    object.__setattr__(self, 'ptype', ptype)
+    object.__setattr__(self, 'roation', rotation)
+    object.__setattr__(self, 'h', h)
+    object.__setattr__(self, 'w', w)
     
   def __hash__(self):
     h = "%d%d%d%d" % (self.ptype, self.rotation, self.h, self.w)
@@ -37,11 +37,21 @@ class Piece(object):
   def __eq__(self, other):
     return self.__hash__() == other.__hash__()
 
+# Same as Piece data structure, except that it has a "data" attribute that contains a
+# matrix representing the piece's position on a HEIGHTxWIDTH plain.
+# "data" attribute is very useful in performing calculations on pieces.
 class DataPiece(Piece):
-  def __init__(self, ptype, rotation, h, w, data):
+  def __init__(self, ptype, rotation, h, w):
     super(DataPiece, self).__init__(ptype, rotation, h, w)
-    self.data = data
-    
+    object.__setattr__(self, 'data', offset(get_piece(ptype, rotation), h, w) )
+  
+  # Make sure data matrix is always representative of data
+  def __setattr__(self, name, value):
+    if name == 'data':
+      raise AttributeError, "Can't modify data, it is dynamically generated"
+    object.__setattr__(self, name, value)
+    object.__setattr__(self, 'data', offset(get_piece(self.ptype, self.rotation), self.h, self.w) )
+
   # Returns piece without representative matrix
   def get_dataless(self):
     return Piece(ptype=self.ptype, rotation=self.rotation, h=self.h, w=self.w)
@@ -195,11 +205,11 @@ def calculate_positions():
         options.append((p, r))
      
     # Create all combinations
-    for p, r in options:   
+    for _, r in options:   
       for h in range(HEIGHT):
         for w in range(WIDTH):
           try:
-            op = DataPiece(ptype=n, rotation=r, h=h, w=w, data=offset(p, h, w))
+            op = DataPiece(ptype=n, rotation=r, h=h, w=w)
             possibilities.append(op)
           except ValueError:
             pass
