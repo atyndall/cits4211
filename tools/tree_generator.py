@@ -279,7 +279,7 @@ def check_possibility(pieces):
     if len(indr) > 0:
       overlap = False
       for i_bounding in indr:
-        if cur_bounding.overlaps(cur_bounding):
+        if cur_bounding.overlaps(i_bounding):
           overlap = True
           break
           
