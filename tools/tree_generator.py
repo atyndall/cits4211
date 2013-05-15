@@ -223,14 +223,14 @@ def calculate_possible(positions):
     
 # Check validity
 def check_validity(pieces):
+  pieces = pieces[0]
   board = np.zeros((HEIGHT, WIDTH), np.bool)
-  pos = True
+  pos = True  
   for p in pieces:
     if valid(p.data, board):
       board = np.logical_or(p.data, board)
     else:
       pos = False
-      
   if pos:
     return pieces
     
@@ -238,12 +238,13 @@ def check_validity(pieces):
 # are valid tetris plays.
 def calculate_valid(possibilities): 
   lp = len(possibilities)
-  search_space = factorial(lp) / ( factorial(lp-PIECES) * factorial(PIECES) )
+  search_space = factorial(lp) / factorial(lp-PIECES)
   
   print "Calculating valid permutations of tetrominoes from all possible (%d permutations)." % search_space
 
   combinations = []
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
+  #for i, res in enumerate( itertools.imap(check_validity, itertools.permutations(possibilities, PIECES)) ):
   for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibilities, PIECES)), search_space/500 ):
     if res: combinations.append(res)
     if i % (search_space/500) == 0 and i != 0:
