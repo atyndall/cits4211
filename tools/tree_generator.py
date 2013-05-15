@@ -333,7 +333,7 @@ def calculate_possible(positions):
     if res:
       combinations.append(res)
     elapsed = time.time() - timer
-    if elapsed > NOTIFY_INTERVAL: # If x seconds have elapsed
+    if elapsed > NOTIFY_INTERVAL and i != 0: # If x seconds have elapsed
       pps = (i-prev_i)/elapsed
       print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
       prev_i = i
@@ -379,7 +379,7 @@ def calculate_valid(possibilities):
         combinations.append([p.get_dataless() for p in res]) # We ditch the matricies as they are now unnecessary
         #combinations.append(res)
       elapsed = time.time() - timer
-      if elapsed > NOTIFY_INTERVAL: # If x seconds have elapsed
+      if elapsed > NOTIFY_INTERVAL and i != 0: # If x seconds have elapsed
         pps = (i-prev_i)/elapsed
         print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
         prev_i = i
