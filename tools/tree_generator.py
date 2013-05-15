@@ -249,8 +249,8 @@ def check_possibility(cur_pieces):
   board = np.zeros((HEIGHT, WIDTH), np.bool)
 
   indr = [] # List of coordinate pairs of all pieces
-  lowestc = (HEIGHT, WIDTH) # Lowest coordinate of all pieces: (bottom, left)
-  highestc = (0, 0) # Highest coordinate of all pieces: (top, right)
+  lowestc = [HEIGHT, WIDTH] # Lowest coordinate of all pieces: (bottom, left)
+  highestc = [0, 0] # Highest coordinate of all pieces: (top, right)
   
   # TODO: Verify that optimisations work
   boxcalc = False
@@ -259,7 +259,7 @@ def check_possibility(cur_pieces):
   for p in cur_pieces:
     pheight = len(pieces[p.ptype])
     pwidth = len(pieces[p.ptype][0])
-    coords = ((p.h, p.w), (pheight + p.h, pwidth + p.w))
+    coords = [[p.h, p.w], [pheight + p.h, pwidth + p.w]]
     max_bounding = Rect(lowestc, highestc)
     cur_bounding = Rect(*coords) # (bottom, left), (top, right)
     
@@ -316,11 +316,13 @@ def calculate_possible(positions):
   search_space = factorial(lp) / ( factorial(lp-PIECES) * factorial(PIECES) )
   
   print "Calculating possible combinations of tetrominoes from all placements (%d combinations)." % search_space
-
+  start_time = time.time()
+  
   combinations = []
   timer = time.time()
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
-  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES), search_space/500) ):
+  #for i, res in enumerate( itertools.imap(check_possibility, itertools.combinations(positions, PIECES)) ):
+  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES), max(5, search_space/500)) ):
     if res:
       combinations.append(res)
     if time.time() - timer > NOTIFY_INTERVAL: # If x seconds have elapsed
@@ -329,6 +331,7 @@ def calculate_possible(positions):
     
   lc = len(combinations)   
   print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES, search_space)
+  print "The calculation took %.1f seconds." % (time.time() - start_time)
   if args.out_p:
     pickle.dump(combinations, open(args.out_p,'wb'))
     print "Output saved to '%s'." % args.out_p
@@ -360,7 +363,7 @@ def calculate_valid(possibilities):
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   for possibility in possibilities:
     # We permute every combination to work out the orders in which it would be valid
-    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES), search_space/20) ):
+    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES), max(5,search_space/20)) ):
       if res:
         combinations.append([p.get_dataless() for p in res]) # We ditch the matricies as they are now unnecessary
         #combinations.append(res)
