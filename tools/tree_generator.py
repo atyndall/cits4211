@@ -138,14 +138,25 @@ def adjacent(a):
 
   m = np.zeros((HEIGHT, WIDTH), np.bool)
   m[-1] = True # Set bottom row
+  nz = np.nonzero(a)
   
   # Set edge values
-  for x in range(HEIGHT):
-    for y in range(WIDTH):
-      if np.all(a[:, y]): # Special case for blocks that take up a whole column
-        m[:, y] = False
-      elif a[x, y] and x > 0:
-        m[x-1, y] = True
+  for i in range(len(nz[0])):
+    x = nz[0][i]
+    y = nz[1][i]
+    
+    if np.all(a[:, y]): # Special case for blocks that take up a whole column
+      m[:, y] = False
+    elif a[x, y] and x > 0:
+      m[x-1, y] = True
+      m[x:, y] = False # EXPERIMENTAL
+  
+  # for x in range(HEIGHT):
+    # for y in range(WIDTH):
+      # if np.all(a[:, y]): # Special case for blocks that take up a whole column
+        # m[:, y] = False
+      # elif a[x, y] and x > 0:
+        # m[x-1, y] = True
         
   # Remove all but heighest values      
   for x in range(HEIGHT):
@@ -164,11 +175,19 @@ def overhang(a):
   WIDTH = a.shape[1]
   
   m = np.zeros((HEIGHT, WIDTH), np.bool)
+  nz = np.nonzero(a)
   
-  for y in range(WIDTH):
-    for x in range(1, HEIGHT):
-      if a[x-1, y] and not a[x, y]:
-        m[x, y] = True
+  for i in range(len(nz[0])):
+    x = nz[0][i]
+    y = nz[1][i]
+    
+    if a[x-1, y] and not a[x, y]:
+      m[x, y] = True
+  
+  # for y in range(WIDTH):
+   # for x in range(1, HEIGHT):
+     # if a[x-1, y] and not a[x, y]:
+       # m[x, y] = True
         
   return m
   
@@ -270,38 +289,39 @@ def check_possibility(cur_pieces):
     prev_p = p
     prev_bounding = cur_bounding
     
-    # Check to see if coordinates collide with bounding box of all current
-    # tetronimos
-    if boxcalc and not max_bounding.overlaps(cur_bounding):
-      continue # There is no collision with the large bounding box, piece will fit
+    # Optimisation is not currently providing better performance
+    # # Check to see if coordinates collide with bounding box of all current
+    # # tetronimos
+    # if boxcalc and not max_bounding.overlaps(cur_bounding):
+      # continue # There is no collision with the large bounding box, piece will fit
       
-    # Check to see if coordinates collide with individual piece bounding
-    # boxes
-    if len(indr) > 0:
-      overlap = False
-      for i_bounding in indr:
-        if cur_bounding.overlaps(i_bounding):
-          overlap = True
-          break
+    # # Check to see if coordinates collide with individual piece bounding
+    # # boxes
+    # if len(indr) > 0:
+      # overlap = False
+      # for i_bounding in indr:
+        # if cur_bounding.overlaps(i_bounding):
+          # overlap = True
+          # break
           
-      if not overlap:
-        continue # There is no collision with individual bounding boxes, piece will fit
+      # if not overlap:
+        # continue # There is no collision with individual bounding boxes, piece will fit
           
-    indr.append(cur_bounding)
+    # indr.append(cur_bounding)
     
-    # Keep track of lowest coordinate
-    if coords[0][0] < lowestc[0]:
-      lowestc[0] = coords[0][0]
-    if coords[0][1] < lowestc[1]:
-      lowestc[1] = coords[0][1]
+    # # Keep track of lowest coordinate
+    # if coords[0][0] < lowestc[0]:
+      # lowestc[0] = coords[0][0]
+    # if coords[0][1] < lowestc[1]:
+      # lowestc[1] = coords[0][1]
     
-    # Keep track of highest coordiate
-    if coords[1][0] > highestc[0]:
-      highestc[0] = coords[1][0]
-    if coords[1][1] > highestc[1]:
-      highestc[1] = coords[1][1]
+    # # Keep track of highest coordiate
+    # if coords[1][0] > highestc[0]:
+      # highestc[0] = coords[1][0]
+    # if coords[1][1] > highestc[1]:
+      # highestc[1] = coords[1][1]
       
-    boxcalc = True
+    # boxcalc = True
     
     # We couldn't work out if it collides or not cheaply, so now onto the hard stuff
     if not possible(p.data, board):
