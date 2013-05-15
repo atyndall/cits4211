@@ -7,6 +7,7 @@ import argparse
 import multiprocessing
 import time
 from math import factorial
+from rect import Rect
 import cPickle as pickle
 
 WIDTH = 4   # Default width
@@ -245,12 +246,64 @@ def calculate_positions():
 # Check possibility
 def check_possibility(pieces):
   board = np.zeros((HEIGHT, WIDTH), np.bool)
-  donepieces = []
+
+  indr = [] # List of coordinate pairs of all pieces
+  lowestc = (HEIGHT, WIDTH) # Lowest coordinate of all pieces: (bottom, left)
+  highestc = (0, 0) # Highest coordinate of all pieces: (top, right)
+  
+  # TODO: Verify that optimisations work
+  boxcalc = False
+  prev_p = None
+  prev_bounding = None
   for p in pieces:
-    donepieces.append(p)
-    if possible(p.data, board):
-      board = np.logical_or(p.data, board)
-    else:
+    pheight = len(pieces[p.ptype])
+    pwidth = len(pieces[p.ptype][0])
+    coords = ((p.h, p.w), (pheight + p.h, pwidth + p.w))
+    max_bounding = Rect(lowestc, highestc)
+    cur_bounding = Rect(*coords) # (bottom, left), (top, right)
+    
+    if prev_p is not None and prev_bounding is not None:
+      board = np.logical_or(prev_p.data, board)
+      indr.append(prev_bounding)
+    
+    prev_p = p
+    prev_bounding = cur_bounding
+    
+    # Check to see if coordinates collide with bounding box of all current
+    # tetronimos
+    if boxcalc and not max_bounding.overlaps(cur_bounding):
+      continue # There is no collision with the large bounding box, piece will fit
+      
+    # Check to see if coordinates collide with individual piece bounding
+    # boxes
+    if len(indr) > 0:
+      overlap = False
+      for i_bounding in indr:
+        if cur_bounding.overlaps(cur_bounding):
+          overlap = True
+          break
+          
+      if not overlap:
+        continue # There is no collision with individual bounding boxes, piece will fit
+          
+    indr.append(cur_bounding)
+    
+    # Keep track of lowest coordinate
+    if coords[0][0] < lowestc[0]:
+      lowestc[0] = coords[0][0]
+    if coords[0][1] < lowestc[1]:
+      lowestc[1] = coords[0][1]
+    
+    # Keep track of highest coordiate
+    if coords[1][0] > highestc[0]:
+      highestc[0] = coords[1][0]
+    if coords[1][1] > highestc[1]:
+      highestc[1] = coords[1][1]
+      
+    boxcalc = True
+    
+    # We couldn't work out if it collides or not cheaply, so now onto the hard stuff
+    if not possible(p.data, board):
       return None # This seems to have improved performance by like 10000%, very suspicious, keep an eye on it
 
   return pieces
