@@ -13,6 +13,7 @@ WIDTH = 4   # Default width
 HEIGHT = 4  # Default height
 PIECES = (WIDTH * HEIGHT) / 4 # Number of pieces that can fit in board
 NOTIFY_INTERVAL = 10 # Number of seconds between progress notification
+UNICODE = True # Unicode support is present in system
 
 args = None
 
@@ -24,6 +25,8 @@ class Piece(object):
     object.__setattr__(self, 'h', h)
     object.__setattr__(self, 'w', w)
     
+  # Generates a unique representation of the piece based on its attributes.
+  # Allows sorting of pieces in an appropriate way.
   def __hash__(self):
     h = "%d%d%d%d" % (self.ptype, self.rotation, self.h, self.w)
     return int(h)
@@ -55,13 +58,23 @@ class DataPiece(Piece):
   # Returns piece without representative matrix
   def get_dataless(self):
     return Piece(ptype=self.ptype, rotation=self.rotation, h=self.h, w=self.w)
+    
+#class DecisionNode(object):
+#  def __init__(self, parent, values*):
 
 # The print_board function prints out a representation of the [True, False]
-# 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares.
+# 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares (or ASCII if there is no support).
 def print_board(a):
+  global UNICODE
   for row in a:
-    #print(''.join([unichr(9632) if e else unichr(9633) for e in row]))
-    print(''.join(['#' if e else '0' for e in row]))
+    if UNICODE:
+      try:
+        print(''.join([unichr(9632) if e else unichr(9633) for e in row]))
+        continue
+      except UnicodeEncodeError: # Windows compatibility
+        UNICODE = False
+
+    print(''.join(['#' if e else '0' for e in row])) 
 
 #
 #   |
@@ -69,7 +82,7 @@ def print_board(a):
 # h |
 #   |
 #   |____________
-#        w >
+#  0     w >
 #
 # The offset function attempts to place a smaller 2D-array "a" in a HEIGHT*WIDTH
 # sized 2D-array with offsets of "h" and "w" as per the diagram above.
@@ -111,6 +124,7 @@ def rall(a):
   
 # The adjacent function returns a 2D-array of all blocks that are vertically adjacent
 # to the given 2D-array "a".
+# A piece is not hovering in midair if part of it collides with the adjacent matrix.
 def adjacent(a):
   HEIGHT = a.shape[0]
   WIDTH = a.shape[1]
@@ -136,6 +150,8 @@ def adjacent(a):
   
 # The overhang function returns a 2D-array of all blocks that are empty space, but
 # have a piece above them.
+# A piece can be successfully dropped from above into its current position if it does
+# not collide with the overhang matrix.
 def overhang(a):
   HEIGHT = a.shape[0]
   WIDTH = a.shape[1]
@@ -150,7 +166,7 @@ def overhang(a):
   return m
   
 # The possible function returns a value indicating if a piece placement "p" on a given
-# Tetris grid "a" would be possible
+# Tetris grid "a" would be possible (p does not occupy the same space as a).
 def possible(p, a):
   # See if the pieces clash
   land = np.logical_and(p, a)
@@ -160,7 +176,8 @@ def possible(p, a):
   return True
  
 # The possible function returns a value indicating if a piece placement "p" on a given
-# Tetris grid "a" would be valid
+# Tetris grid "a" would be valid (p is not in mid-air, and can be dropped vertically
+# into destination position).
 def valid(p, a):
   # See if the piece is being placed in mid-air 
   hover = np.logical_and( p, adjacent(a) )
@@ -200,6 +217,7 @@ def calculate_positions():
       for p2, r2 in options:
         if np.array_equal(p, p2):
           already = True
+      print_board(p)
        
       if not already:
         options.append((p, r))
@@ -228,9 +246,9 @@ def check_possibility(pieces):
     if possible(p.data, board):
       board = np.logical_or(p.data, board)
     else:
-      return False
+      return None
 
-  return True
+  return pieces
  
 # We combine all existing combinations and rotations of pieces to see which
 # successfully fit together.
@@ -243,8 +261,9 @@ def calculate_possible(positions):
   combinations = []
   timer = time.time()
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
-  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES)), search_space/500 ):
-    if res: combinations.append(res)
+  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES), search_space/500) ):
+    if res:
+      combinations.append(res)
     if time.time() - timer > NOTIFY_INTERVAL: # If x seconds have elapsed
       print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
       timer = time.time()
@@ -265,7 +284,7 @@ def check_validity(pieces):
     if valid(p.data, board):
       board = np.logical_or(p.data, board)
     else:
-      pos = False
+      return None
   if pos:
     return pieces
     
@@ -282,7 +301,7 @@ def calculate_valid(possibilities):
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   for possibility in possibilities:
     # We permute every combination to work out the orders in which it would be valid
-    for res in pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES)):
+    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES), search_space/20) ):
       if res:
         combinations.append((p.get_dataless() for p in res)) # We ditch the matricies as they are now unnecessary
         #combinations.append(res)
