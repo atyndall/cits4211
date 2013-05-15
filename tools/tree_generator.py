@@ -309,6 +309,12 @@ def check_possibility(cur_pieces):
 
   return cur_pieces
  
+# Input seconds, output H:MM:SS
+def time_remaining(s):
+  hours, remainder = divmod(s, 3600)
+  minutes, seconds = divmod(remainder, 60)
+  return '%.f:%02.f:%02.f' % (hours, minutes, seconds)
+ 
 # We combine all existing combinations and rotations of pieces to see which
 # successfully fit together.
 def calculate_possible(positions): 
@@ -320,13 +326,17 @@ def calculate_possible(positions):
   
   combinations = []
   timer = time.time()
+  prev_i = 0
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   #for i, res in enumerate( itertools.imap(check_possibility, itertools.combinations(positions, PIECES)) ):
   for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES), max(5, search_space/500)) ):
     if res:
       combinations.append(res)
-    if time.time() - timer > NOTIFY_INTERVAL: # If x seconds have elapsed
-      print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
+    elapsed = time.time() - timer
+    if elapsed > NOTIFY_INTERVAL: # If x seconds have elapsed
+      pps = (i-prev_i)/elapsed
+      print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
+      prev_i = i
       timer = time.time()
     
   lc = len(combinations)   
@@ -349,7 +359,7 @@ def check_validity(pieces):
       return None
   if pos:
     return pieces
-    
+   
 # We permute over all possible combinations and rotations of pieces to see which
 # are valid tetris plays.
 def calculate_valid(possibilities): 
@@ -360,6 +370,7 @@ def calculate_valid(possibilities):
 
   combinations = []
   timer = time.time()
+  prev_i = 0
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   for possibility in possibilities:
     # We permute every combination to work out the orders in which it would be valid
@@ -367,9 +378,12 @@ def calculate_valid(possibilities):
       if res:
         combinations.append([p.get_dataless() for p in res]) # We ditch the matricies as they are now unnecessary
         #combinations.append(res)
-    if time.time() - timer > NOTIFY_INTERVAL: # If x seconds have elapsed
-      print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
-      timer = time.time()
+      elapsed = time.time() - timer
+      if elapsed > NOTIFY_INTERVAL: # If x seconds have elapsed
+        pps = (i-prev_i)/elapsed
+        print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
+        prev_i = i
+        timer = time.time()
     
   lc = len(combinations)   
   print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES, search_space)
