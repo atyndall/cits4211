@@ -353,6 +353,7 @@ if __name__ == "__main__":
 
   WIDTH  = args.width   # Width of board
   HEIGHT = args.height  # Height of board
+  PIECES = (WIDTH * HEIGHT) / 4
   
   if args.in_p:
     p = pickle.load( open(args.in_p,'rb') )
