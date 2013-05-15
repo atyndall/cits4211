@@ -12,15 +12,39 @@ import cPickle as pickle
 WIDTH = 4   # Default width
 HEIGHT = 4  # Default height
 PIECES = (WIDTH * HEIGHT) / 4 # Number of pieces that can fit in board
+NOTIFY_INTERVAL = 10 # Number of seconds between progress notification
 
 args = None
 
 # Define a data structure to hold the piece information
-NonHashPiece = collections.namedtuple('Piece', ['type', 'rotation', 'h', 'w', 'data'])
-class OrientedPiece(NonHashPiece):
+class Piece(object):
+  def __init__(self, ptype, rotation, h, w):
+    self.ptype = ptype
+    self.rotation = rotation
+    self.h = h
+    self.w = w
+    
   def __hash__(self):
-    h = "%d%d%d%d" % (self.type, self.rotation, self.h, self.w)
+    h = "%d%d%d%d" % (self.ptype, self.rotation, self.h, self.w)
     return int(h)
+    
+  def __lt__(self, other):
+    return self.__hash__() < other.__hash__()
+    
+  def __gt__(self, other):
+    return self.__hash__() > other.__hash__()
+    
+  def __eq__(self, other):
+    return self.__hash__() == other.__hash__()
+
+class DataPiece(Piece):
+  def __init__(self, ptype, rotation, h, w, data):
+    super(DataPiece, self).__init__(ptype, rotation, h, w)
+    self.data = data
+    
+  # Returns piece without representative matrix
+  def get_dataless(self):
+    return Piece(ptype=self.ptype, rotation=self.rotation, h=self.h, w=self.w)
 
 # The print_board function prints out a representation of the [True, False]
 # 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares.
@@ -175,7 +199,7 @@ def calculate_positions():
       for h in range(HEIGHT):
         for w in range(WIDTH):
           try:
-            op = OrientedPiece(type=n, rotation=r, h=h, w=w, data=offset(p, h, w))
+            op = DataPiece(ptype=n, rotation=r, h=h, w=w, data=offset(p, h, w))
             possibilities.append(op)
           except ValueError:
             pass
@@ -188,15 +212,15 @@ def calculate_positions():
 # Check possibility
 def check_possibility(pieces):
   board = np.zeros((HEIGHT, WIDTH), np.bool)
-  pos = True
+  donepieces = []
   for p in pieces:
+    donepieces.append(p)
     if possible(p.data, board):
       board = np.logical_or(p.data, board)
     else:
-      pos = False
-      
-  if pos:
-    return pieces
+      return False
+
+  return True
  
 # We combine all existing combinations and rotations of pieces to see which
 # successfully fit together.
@@ -207,11 +231,13 @@ def calculate_possible(positions):
   print "Calculating possible combinations of tetrominoes from all placements (%d combinations)." % search_space
 
   combinations = []
+  timer = time.time()
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES)), search_space/500 ):
     if res: combinations.append(res)
-    if i % (search_space/500) == 0 and i != 0:
+    if time.time() - timer > NOTIFY_INTERVAL: # If x seconds have elapsed
       print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
+      timer = time.time()
     
   lc = len(combinations)   
   print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES, search_space)
@@ -223,7 +249,6 @@ def calculate_possible(positions):
     
 # Check validity
 def check_validity(pieces):
-  pieces = pieces[0]
   board = np.zeros((HEIGHT, WIDTH), np.bool)
   pos = True  
   for p in pieces:
@@ -238,23 +263,35 @@ def check_validity(pieces):
 # are valid tetris plays.
 def calculate_valid(possibilities): 
   lp = len(possibilities)
-  search_space = factorial(lp) / factorial(lp-PIECES)
+  search_space = lp * factorial(PIECES)
   
   print "Calculating valid permutations of tetrominoes from all possible (%d permutations)." % search_space
 
   combinations = []
+  timer = time.time()
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
-  #for i, res in enumerate( itertools.imap(check_validity, itertools.permutations(possibilities, PIECES)) ):
-  for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibilities, PIECES)), search_space/500 ):
-    if res: combinations.append(res)
-    if i % (search_space/500) == 0 and i != 0:
+  for possibility in possibilities:
+    # We permute every combination to work out the orders in which it would be valid
+    for res in pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES)):
+      if res:
+        combinations.append((p.get_dataless() for p in res)) # We ditch the matricies as they are now unnecessary
+        #combinations.append(res)
+    if time.time() - timer > NOTIFY_INTERVAL: # If x seconds have elapsed
       print "Searched %d/%d placements (%.1f%% complete)" % (i, search_space, (i/float(search_space))*100)
+      timer = time.time()
     
   lc = len(combinations)   
   print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES, search_space)
   if args.out_v:
     pickle.dump(combinations, open(args.out_v,'wb'))
     print "Output saved to '%s'." % args.out_v
+    
+  combinations.sort()
+  create_tree(combinations)
+  
+# Creates tree from sorted list of tuples of actions
+def create_tree(permutations):
+  return None
   
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
@@ -269,6 +306,8 @@ if __name__ == "__main__":
   pin = parser.add_mutually_exclusive_group()
   pin.add_argument('--in-p', metavar='IN_P', type=str,
     help='import possibilities and resume program')
+  pin.add_argument('--in-v', metavar='IN_V', type=str,
+    help='import valid permutations and resume program')
 
   pout = parser.add_argument_group('output')
   pout.add_argument('--out-p', metavar='OUT_P', type=str,
@@ -284,5 +323,8 @@ if __name__ == "__main__":
   if args.in_p:
     p = pickle.load( open(args.in_p,'rb') )
     calculate_valid(p)
+  if args.in_v:
+    p = pickle.load( open(args.in_v,'rb') )
+    create_tree(p)
   else:
     calculate_positions()
