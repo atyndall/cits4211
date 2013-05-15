@@ -244,7 +244,8 @@ def calculate_positions():
   calculate_possible(possibilities)
  
 # Check possibility
-def check_possibility(pieces):
+def check_possibility(cur_pieces):
+  global pieces
   board = np.zeros((HEIGHT, WIDTH), np.bool)
 
   indr = [] # List of coordinate pairs of all pieces
@@ -255,7 +256,7 @@ def check_possibility(pieces):
   boxcalc = False
   prev_p = None
   prev_bounding = None
-  for p in pieces:
+  for p in cur_pieces:
     pheight = len(pieces[p.ptype])
     pwidth = len(pieces[p.ptype][0])
     coords = ((p.h, p.w), (pheight + p.h, pwidth + p.w))
@@ -306,7 +307,7 @@ def check_possibility(pieces):
     if not possible(p.data, board):
       return None # This seems to have improved performance by like 10000%, very suspicious, keep an eye on it
 
-  return pieces
+  return cur_pieces
  
 # We combine all existing combinations and rotations of pieces to see which
 # successfully fit together.
