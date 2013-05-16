@@ -72,10 +72,12 @@ class DAction(Action):
 # State represents a current state of the game
 class State(object):
   def __init__(self, parent, board):
-    self.actions = [dict() for x in range(NUM_PIECES)] # Actions are indexes to new states, indexed by piece for performance
-    self.parent = parent
-    # self.board = board # NumPy matrix representing board at given time
+    # Actions are indexes to new states, indexed by piece type for performance
+    self.actions = [dict() for x in range(NUM_PIECES)] 
+    
+    self.parent = parent # Parent state
     self.utility = utility(board) # Utility of this state
+    self.max_utility = float('-inf') # Maximum utility of the actions under this state
     self._bhash = matrix_hash(board) # Stores unique representation of state
 
   def __repr__(self):
