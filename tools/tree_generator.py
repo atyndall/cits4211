@@ -13,6 +13,7 @@ import cPickle as pickle
 WIDTH = 4   # Default width
 HEIGHT = 4  # Default height
 PIECES = (WIDTH * HEIGHT) / 4 # Number of pieces that can fit in board
+NUM_PIECES = len(pieces)
 NOTIFY_INTERVAL = 10 # Number of seconds between progress notification
 UNICODE = True # Unicode support is present in system
 
@@ -61,10 +62,68 @@ class DataPiece(Piece):
     
   def __repr__(self):
     return "DataPiece(ptype=%s, rotation=%s, h=%s, w=%s)" % (self.ptype, self.rotation, self.h, self.w)
-    
-#class DecisionNode(object):
-#  def __init__(self, parent, values*):
 
+# Tree represents the root node of a decision tree comprised of DNodes that index PNodes
+class Tree(object):
+  def __init__(self):
+    self.children = [None] * NUM_PIECES # Children are PNodes, there is a fixed amount
+    self.parent = None # Tree doesn't have a parent 
+  
+  def __repr__(self):
+    return "Tree(%s)" % hex(id(self))
+    
+# DNodes represent decisions that contain a specific rotation and placement of a piece  
+class DNode(object):
+  def __init__(self, rotation, h, w):
+    self.rotation = rotation
+    self.h = h
+    self.w = w
+    
+  def __repr__(self):
+    return "DNode(%s)" % hex(id(self))
+    
+  def __str__(self):
+    return "DNode(rotation=%s, h=%s, w=%s)" % (self.rotation, self.h, self.w)
+    
+  def __hash__(self):
+    h = "%d%d%d" % (self.rotation, self.h, self.w)
+    return int(h)
+  
+# PNodes represent pieces on the tree
+class PNode(object):
+  def __init__(self, parent, ptype):
+    self.parent = parent # Parent node is another PNode
+    self.children = {} # DNodes are indexes into new PNodes
+    self.ptype = ptype
+
+  def __repr__(self):
+    return "PNode(%s)" % hex(id(self))
+    
+  def __str__(self):
+    return "PNode(parent=%s, ptype=%s, n_child=%s)" % (self.parent, self.ptype, len(self.children))
+
+  def __hash__(self):
+    h = "%d%d" % (id(self.parent), self.ptype)
+    return int(h)
+
+# A decision node contains a pointer to a parent node (or None if root) and pointers to various
+# children nodes
+# MaxUtility = collections.namedtuple('MaxUtility', ['rotation', 'node', 'utility'])  
+# class DNode(object):
+  # max_utility = MaxUtility(None, None, float('-inf')) # Contains the maximum utility of all child nodes
+  # utility = float('-inf') # Contains the utility of the board in which actions to this node are executed
+  # type = None # Contains number identifying node
+  
+  # def __init__(self, parent):
+    # global pieces
+    # self._nchildren = len(pieces) # Holds number of children nodes
+    # self.children = [[None] * self._nchildren] * 4 # Array indexes the rotation of the piece, then the child pieces that follow from that rotation
+    
+    # if len(children) != self._nchildren:
+      # raise ValueError, "Incorrect number of children"
+      
+# def temp_tree(): return defaultdict(temp_tree)
+      
 # The print_board function prints out a representation of the [True, False]
 # 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares (or ASCII if there is no support).
 def print_board(a):
@@ -138,25 +197,14 @@ def adjacent(a):
 
   m = np.zeros((HEIGHT, WIDTH), np.bool)
   m[-1] = True # Set bottom row
-  nz = np.nonzero(a)
   
   # Set edge values
-  for i in range(len(nz[0])):
-    x = nz[0][i]
-    y = nz[1][i]
-    
-    if np.all(a[:, y]): # Special case for blocks that take up a whole column
-      m[:, y] = False
-    elif a[x, y] and x > 0:
-      m[x-1, y] = True
-      m[x:, y] = False # EXPERIMENTAL
-  
-  # for x in range(HEIGHT):
-    # for y in range(WIDTH):
-      # if np.all(a[:, y]): # Special case for blocks that take up a whole column
-        # m[:, y] = False
-      # elif a[x, y] and x > 0:
-        # m[x-1, y] = True
+  for x in range(HEIGHT):
+    for y in range(WIDTH):
+      if np.all(a[:, y]): # Special case for blocks that take up a whole column
+        m[:, y] = False
+      elif a[x, y] and x > 0:
+        m[x-1, y] = True
         
   # Remove all but heighest values      
   for x in range(HEIGHT):
@@ -175,19 +223,11 @@ def overhang(a):
   WIDTH = a.shape[1]
   
   m = np.zeros((HEIGHT, WIDTH), np.bool)
-  nz = np.nonzero(a)
   
-  for i in range(len(nz[0])):
-    x = nz[0][i]
-    y = nz[1][i]
-    
-    if a[x-1, y] and not a[x, y]:
-      m[x, y] = True
-  
-  # for y in range(WIDTH):
-   # for x in range(1, HEIGHT):
-     # if a[x-1, y] and not a[x, y]:
-       # m[x, y] = True
+  for y in range(WIDTH):
+   for x in range(1, HEIGHT):
+     if a[x-1, y] and not a[x, y]:
+       m[x, y] = True
         
   return m
   
@@ -221,7 +261,7 @@ def valid(p, a):
 def calculate_positions():  
   print 'Computing all possible orientations and positions of given tetrominoes on %dx%d grid.' % (WIDTH, HEIGHT)
   possibilities = []
-  for n, p in pieces.items():
+  for n, p in enumerate(pieces):
     options = []
     p_width = len(p[0])
     p_height = len(p)
@@ -358,10 +398,11 @@ def calculate_possible(positions):
       print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
       prev_i = i
       timer = time.time()
+  pool.terminate()
     
   lc = len(combinations)   
   print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES, search_space)
-  print "The calculation took %.1f seconds." % (time.time() - start_time)
+  print "The calculation took %.1f." % time_remaining(time.time() - start_time)
   if args.out_p:
     pickle.dump(combinations, open(args.out_p,'wb'))
     print "Output saved to '%s'." % args.out_p
@@ -398,12 +439,18 @@ def calculate_valid(possibilities):
       if res:
         combinations.append([p.get_dataless() for p in res]) # We ditch the matricies as they are now unnecessary
         #combinations.append(res)
+        # c = combinations
+        # for p in res:
+          # c[p] = {}
+          # c = c[p]
+            
       elapsed = time.time() - timer
       if elapsed > NOTIFY_INTERVAL and i != 0: # If x seconds have elapsed
         pps = (i-prev_i)/elapsed
         print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
         prev_i = i
         timer = time.time()
+  pool.terminate()
     
   lc = len(combinations)   
   print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES, search_space)
@@ -415,8 +462,78 @@ def calculate_valid(possibilities):
   create_tree(combinations)
   
 # Creates tree from sorted list of tuples of actions
+# "permutations" assumes a sorted list of permutations
 def create_tree(permutations):
-  return None
+  print "Converting %d permutations into decision tree." % len(permutations)
+  
+  # Create root tree node. It has no parent and maximal utility.
+  root = Tree()
+  #root.utility = float('inf') # Utility of this action
+  #root.max_utility = float('inf') # Maximum utility of action below this node in the tree
+  #root.type = -1 # Root node has -1 type
+  
+  # Note: Optimal moves have a +inf utility
+  
+  for nodes in permutations:
+    #cur_rot = None
+    #cur_type = None
+    cur_parent = root
+    prev_p = None
+    first = True
+    for p in nodes:
+      if first:
+        root.children[p.ptype] = PNode(root, p.ptype)
+        cur_parent = root.children[p.ptype].children
+        prev_p = p
+        first = False
+      else:
+        dnode = DNode(prev_p.rotation, prev_p.h, prev_p.w)
+        pnode = PNode(root, p.ptype)
+        cur_parent[dnode] = pnode
+        cur_parent = pnode.children
+    
+      # cur_pnode = cur_parent.children[p.ptype]
+      
+      # Create a PNode and place it on the tree
+      # if cur_parent.children[p.ptype] is None:
+        # cur_pnode = PNode(cur_parent, p.ptype)
+        # cur_parent.children[p.ptype] = cur_pnode
+      
+      # Create a DNode and place it on the tree    
+      # cur_dnode = DNode(cur_pnode, p.rotation, p.h, p.w)
+      # cur_pnode.children.add(cur_dnode)
+      
+      # cur_parent = cur_dnode
+
+      
+    
+      # if p.ptype != cur_type:
+        # cur_type = p.ptype
+        
+      # if p.rotation != cur_rot:
+        # cur_rot = p.rotation
+       
+      # child_node = cur_node.children[cur_rot][cur_type]
+       
+      # if child_node is None:
+        # child_node = DNode(cur_node)
+  
+  # Enter an interactive shell
+  #import readline # optional, will allow Up/Down/History in the console
+  import code
+  vars = globals().copy()
+  vars.update(locals())
+  shell = code.InteractiveConsole(vars)
+  shell.interact()
+    
+def print_tree(root, depth):
+  print "Depth: %d" % depth
+  if depth == 0:
+    print root
+  for c in root.children:
+    print c
+    time.sleep(1)
+    print_tree(c, depth+1)
   
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
@@ -449,7 +566,7 @@ if __name__ == "__main__":
   if args.in_p:
     p = pickle.load( open(args.in_p,'rb') )
     calculate_valid(p)
-  if args.in_v:
+  elif args.in_v:
     p = pickle.load( open(args.in_v,'rb') )
     create_tree(p)
   else:

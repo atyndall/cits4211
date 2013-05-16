@@ -1,29 +1,29 @@
-pieces = {
-  1: [ [True],
+pieces = [
+     [ [True],
        [True],
        [True],
        [True] ],
     
-  2: [ [True, True],
+     [ [True, True],
        [True, True] ],
     
-  3: [ [True, False],
+     [ [True, False],
        [True,  True],
        [True, False] ],
 
-  4: [ [True,  True],
+     [ [True,  True],
        [True, False],
        [True, False] ],
     
-  5: [ [ True, True],
+     [ [ True, True],
        [False, True],
        [False, True] ],
     
-  6: [ [ True, False],
+     [ [ True, False],
        [ True,  True],
        [False,  True] ],
     
-  7: [ [False,  True],
+     [ [False,  True],
        [ True,  True],
        [ True, False] ],
-}
+]
