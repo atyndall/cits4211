@@ -1,4 +1,4 @@
-pieces = [
+PIECES = [
      [ [True],
        [True],
        [True],

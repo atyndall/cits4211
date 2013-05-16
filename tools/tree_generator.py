@@ -1,4 +1,4 @@
-from piece_definitions import pieces
+from piece_definitions import PIECES
 import numpy as np
 import sys
 import collections
@@ -6,34 +6,39 @@ import itertools
 import argparse
 import multiprocessing
 import time
+import hashlib
 from math import factorial
 from rect import Rect
 import cPickle as pickle
 
 WIDTH = 4   # Default width
 HEIGHT = 4  # Default height
-PIECES = (WIDTH * HEIGHT) / 4 # Number of pieces that can fit in board
-NUM_PIECES = len(pieces)
+PIECES_FIT = (WIDTH * HEIGHT) / 4 # Number of pieces that can fit in board
+NUM_PIECES = len(PIECES)
 NOTIFY_INTERVAL = 10 # Number of seconds between progress notification
 UNICODE = True # Unicode support is present in system
 
 args = None
-
-# Define a data structure to hold the piece information
-class Piece(object):
-  def __init__(self, ptype, rotation, h, w):
-    if ptype is None or rotation is None or h is None or w is None:
-      raise ValueError, "Required values not supplied"
-      
-    self.ptype = ptype
+    
+# Action represents an action
+class Action(object):
+  def __init__(self, piece, rotation, h, w):
+    if not (isinstance(piece, int) and isinstance(rotation, int)
+      and isinstance(h, int) and isinstance(w, int)):
+      raise ValueError, "Incorrect parameters"
+  
+    self.piece = piece
     self.rotation = rotation
     self.h = h
     self.w = w
     
+  def __repr__(self):
+    return "A(p:%s r:%s h:%s w:%s)" % (self.piece, self.rotation, self.h, self.w)
+    
   # Generates a unique representation of the piece based on its attributes.
   # Allows sorting of pieces in an appropriate way.
   def __hash__(self):
-    h = "%d%d%d%d" % (self.ptype, self.rotation, self.h, self.w)
+    h = "%d%d%d%d" % (self.piece, self.rotation, self.h, self.w)
     return int(h)
     
   def __lt__(self, other):
@@ -45,84 +50,49 @@ class Piece(object):
   def __eq__(self, other):
     return self.__hash__() == other.__hash__()
     
-  def __repr__(self):
-    return "Piece(ptype=%s, rotation=%s, h=%s, w=%s)" % (self.ptype, self.rotation, self.h, self.w)
-
-# Same as Piece data structure, except that it has a "data" attribute that contains a
+  def __hash__(self):
+    h = "%d%d%d%d" % (self.piece, self.rotation, self.h, self.w)
+    return int(h) 
+ 
+# Same as Action data structure, except that it has a "data" attribute that contains a
 # matrix representing the piece's position on a HEIGHTxWIDTH plain.
 # "data" attribute is very useful in performing calculations on pieces.
-class DataPiece(Piece):
-  def __init__(self, ptype, rotation, h, w):
-    super(DataPiece, self).__init__(ptype, rotation, h, w)
-    self.data = offset(get_piece(ptype, rotation), h, w)
+class DAction(Action):
+  def __init__(self, piece, rotation, h, w):
+    super(DAction, self).__init__(piece, rotation, h, w)
+    self.data = offset(get_piece(piece, rotation), h, w)
 
   # Returns piece without representative matrix
-  def get_dataless(self):
-    return Piece(self.ptype, self.rotation, self.h, self.w)
+  def get_action(self):
+    return Action(self.piece, self.rotation, self.h, self.w)
     
   def __repr__(self):
-    return "DataPiece(ptype=%s, rotation=%s, h=%s, w=%s)" % (self.ptype, self.rotation, self.h, self.w)
-
-# Tree represents the root node of a decision tree comprised of DNodes that index PNodes
-class Tree(object):
-  def __init__(self):
-    self.children = [None] * NUM_PIECES # Children are PNodes, there is a fixed amount
-    self.parent = None # Tree doesn't have a parent 
+    return "DA(p:%s r:%s h:%s w:%s)" % (self.piece, self.rotation, self.h, self.w)
   
-  def __repr__(self):
-    return "Tree(%s)" % hex(id(self))
-    
-# DNodes represent decisions that contain a specific rotation and placement of a piece  
-class DNode(object):
-  def __init__(self, rotation, h, w):
-    self.rotation = rotation
-    self.h = h
-    self.w = w
-    
-  def __repr__(self):
-    return "DNode(%s)" % hex(id(self))
-    
-  def __str__(self):
-    return "DNode(rotation=%s, h=%s, w=%s)" % (self.rotation, self.h, self.w)
-    
-  def __hash__(self):
-    h = "%d%d%d" % (self.rotation, self.h, self.w)
-    return int(h)
-  
-# PNodes represent pieces on the tree
-class PNode(object):
-  def __init__(self, parent, ptype):
-    self.parent = parent # Parent node is another PNode
-    self.children = {} # DNodes are indexes into new PNodes
-    self.ptype = ptype
+# State represents a current state of the game
+class State(object):
+  def __init__(self, parent, board):
+    self.actions = [dict() for x in range(NUM_PIECES)] # Actions are indexes to new states, indexed by piece for performance
+    self.parent = parent
+    # self.board = board # NumPy matrix representing board at given time
+    self.utility = utility(board) # Utility of this state
+    self._bhash = matrix_hash(board) # Stores unique representation of state
 
   def __repr__(self):
-    return "PNode(%s)" % hex(id(self))
-    
-  def __str__(self):
-    return "PNode(parent=%s, ptype=%s, n_child=%s)" % (self.parent, self.ptype, len(self.children))
+    return "S(%s, u:%.2f)" % (hex(self.__hash__())[2:-1], self.utility)
 
   def __hash__(self):
-    h = "%d%d" % (id(self.parent), self.ptype)
-    return int(h)
-
-# A decision node contains a pointer to a parent node (or None if root) and pointers to various
-# children nodes
-# MaxUtility = collections.namedtuple('MaxUtility', ['rotation', 'node', 'utility'])  
-# class DNode(object):
-  # max_utility = MaxUtility(None, None, float('-inf')) # Contains the maximum utility of all child nodes
-  # utility = float('-inf') # Contains the utility of the board in which actions to this node are executed
-  # type = None # Contains number identifying node
-  
-  # def __init__(self, parent):
-    # global pieces
-    # self._nchildren = len(pieces) # Holds number of children nodes
-    # self.children = [[None] * self._nchildren] * 4 # Array indexes the rotation of the piece, then the child pieces that follow from that rotation
+    s = "%d%d" %(id(self.parent), self._bhash)
+    return int(s)
     
-    # if len(children) != self._nchildren:
-      # raise ValueError, "Incorrect number of children"
-      
-# def temp_tree(): return defaultdict(temp_tree)
+# Returns a unique hash for each matrix' dimensions
+# Hash is only unique for matricies of the same dimension
+def matrix_hash(x):
+  return long(''.join(['1' if e else '0' for e in np.reshape(x, -1)]), 2)
+
+# Returns the utility of the board in its current state
+def utility(board):
+  return float('-inf')
       
 # The print_board function prints out a representation of the [True, False]
 # 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares (or ASCII if there is no support).
@@ -174,7 +144,7 @@ def offset(a, h, w):
   
 # The get_piece function returns an piece with the appropriate rotation
 def get_piece(type, rotation):
-  return np.rot90(pieces[type], rotation)
+  return np.rot90(PIECES[type], rotation)
  
 # The rall function recursively checks that all lists and sublists of element "a"
 # have a True value, otherwise it returns False. 
@@ -261,7 +231,7 @@ def valid(p, a):
 def calculate_positions():  
   print 'Computing all possible orientations and positions of given tetrominoes on %dx%d grid.' % (WIDTH, HEIGHT)
   possibilities = []
-  for n, p in enumerate(pieces):
+  for n, p in enumerate(PIECES):
     options = []
     p_width = len(p[0])
     p_height = len(p)
@@ -292,7 +262,7 @@ def calculate_positions():
       for h in range(HEIGHT):
         for w in range(WIDTH):
           try:
-            op = DataPiece(n, r, h, w)
+            op = DAction(n, r, h, w)
             possibilities.append(op)
           except PieceNotFitError:
             pass
@@ -304,20 +274,19 @@ def calculate_positions():
  
 # Check possibility
 def check_possibility(cur_pieces):
-  global pieces
+  global PIECES
   board = np.zeros((HEIGHT, WIDTH), np.bool)
 
   indr = [] # List of coordinate pairs of all pieces
   lowestc = [HEIGHT, WIDTH] # Lowest coordinate of all pieces: (bottom, left)
   highestc = [0, 0] # Highest coordinate of all pieces: (top, right)
   
-  # TODO: Verify that optimisations work
   boxcalc = False
   prev_p = None
   prev_bounding = None
   for p in cur_pieces:
-    pheight = len(pieces[p.ptype])
-    pwidth = len(pieces[p.ptype][0])
+    pheight = len(PIECES[p.piece])
+    pwidth = len(PIECES[p.piece][0])
     coords = [[p.h, p.w], [pheight + p.h, pwidth + p.w]]
     max_bounding = Rect(lowestc, highestc)
     cur_bounding = Rect(*coords) # (bottom, left), (top, right)
@@ -329,40 +298,6 @@ def check_possibility(cur_pieces):
     prev_p = p
     prev_bounding = cur_bounding
     
-    # Optimisation is not currently providing better performance
-    # # Check to see if coordinates collide with bounding box of all current
-    # # tetronimos
-    # if boxcalc and not max_bounding.overlaps(cur_bounding):
-      # continue # There is no collision with the large bounding box, piece will fit
-      
-    # # Check to see if coordinates collide with individual piece bounding
-    # # boxes
-    # if len(indr) > 0:
-      # overlap = False
-      # for i_bounding in indr:
-        # if cur_bounding.overlaps(i_bounding):
-          # overlap = True
-          # break
-          
-      # if not overlap:
-        # continue # There is no collision with individual bounding boxes, piece will fit
-          
-    # indr.append(cur_bounding)
-    
-    # # Keep track of lowest coordinate
-    # if coords[0][0] < lowestc[0]:
-      # lowestc[0] = coords[0][0]
-    # if coords[0][1] < lowestc[1]:
-      # lowestc[1] = coords[0][1]
-    
-    # # Keep track of highest coordiate
-    # if coords[1][0] > highestc[0]:
-      # highestc[0] = coords[1][0]
-    # if coords[1][1] > highestc[1]:
-      # highestc[1] = coords[1][1]
-      
-    # boxcalc = True
-    
     # We couldn't work out if it collides or not cheaply, so now onto the hard stuff
     if not possible(p.data, board):
       return None # This seems to have improved performance by like 10000%, very suspicious, keep an eye on it
@@ -370,7 +305,7 @@ def check_possibility(cur_pieces):
   return cur_pieces
  
 # Input seconds, output H:MM:SS
-def time_remaining(s):
+def time_output(s):
   hours, remainder = divmod(s, 3600)
   minutes, seconds = divmod(remainder, 60)
   return '%.f:%02.f:%02.f' % (hours, minutes, seconds)
@@ -379,7 +314,7 @@ def time_remaining(s):
 # successfully fit together.
 def calculate_possible(positions): 
   lp = len(positions)
-  search_space = factorial(lp) / ( factorial(lp-PIECES) * factorial(PIECES) )
+  search_space = factorial(lp) / ( factorial(lp-PIECES_FIT) * factorial(PIECES_FIT) )
   
   print "Calculating possible combinations of tetrominoes from all placements (%d combinations)." % search_space
   start_time = time.time()
@@ -388,21 +323,21 @@ def calculate_possible(positions):
   timer = time.time()
   prev_i = 0
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
-  #for i, res in enumerate( itertools.imap(check_possibility, itertools.combinations(positions, PIECES)) ):
-  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES), max(5, search_space/500)) ):
+  #for i, res in enumerate( itertools.imap(check_possibility, itertools.combinations(positions, PIECES_FIT)) ):
+  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES_FIT), max(5, search_space/500)) ):
     if res:
       combinations.append(res)
     elapsed = time.time() - timer
     if elapsed > NOTIFY_INTERVAL and i != 0: # If x seconds have elapsed
       pps = (i-prev_i)/elapsed
-      print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
+      print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_output((search_space-i)/pps))
       prev_i = i
       timer = time.time()
   pool.terminate()
     
   lc = len(combinations)   
-  print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES, search_space)
-  print "The calculation took %.1f." % time_remaining(time.time() - start_time)
+  print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES_FIT, search_space)
+  print "The calculation took %s." % time_output(time.time() - start_time)
   if args.out_p:
     pickle.dump(combinations, open(args.out_p,'wb'))
     print "Output saved to '%s'." % args.out_p
@@ -425,7 +360,8 @@ def check_validity(pieces):
 # are valid tetris plays.
 def calculate_valid(possibilities): 
   lp = len(possibilities)
-  search_space = lp * factorial(PIECES)
+  search_space = lp * factorial(PIECES_FIT)
+  start_time = time.time()
   
   print "Calculating valid permutations of tetrominoes from all possible (%d permutations)." % search_space
 
@@ -435,25 +371,21 @@ def calculate_valid(possibilities):
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   for possibility in possibilities:
     # We permute every combination to work out the orders in which it would be valid
-    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES), max(5,search_space/20)) ):
+    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES_FIT), max(5,search_space/20)) ):
       if res:
-        combinations.append([p.get_dataless() for p in res]) # We ditch the matricies as they are now unnecessary
-        #combinations.append(res)
-        # c = combinations
-        # for p in res:
-          # c[p] = {}
-          # c = c[p]
+        combinations.append(res)
             
       elapsed = time.time() - timer
       if elapsed > NOTIFY_INTERVAL and i != 0: # If x seconds have elapsed
         pps = (i-prev_i)/elapsed
-        print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_remaining((search_space-i)/pps))
+        print "Searched %d/%d placements (%.1f%% complete, %.0f pieces/sec, ~%s remaining)" % (i, search_space, (i/float(search_space))*100, pps, time_output((search_space-i)/pps))
         prev_i = i
         timer = time.time()
   pool.terminate()
     
   lc = len(combinations)   
-  print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES, search_space)
+  print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES_FIT, search_space)
+  print "The calculation took %s." % time_output(time.time() - start_time)
   if args.out_v:
     pickle.dump(combinations, open(args.out_v,'wb'))
     print "Output saved to '%s'." % args.out_v
@@ -467,73 +399,31 @@ def create_tree(permutations):
   print "Converting %d permutations into decision tree." % len(permutations)
   
   # Create root tree node. It has no parent and maximal utility.
-  root = Tree()
-  #root.utility = float('inf') # Utility of this action
-  #root.max_utility = float('inf') # Maximum utility of action below this node in the tree
-  #root.type = -1 # Root node has -1 type
-  
-  # Note: Optimal moves have a +inf utility
+  root = State(None, np.zeros((HEIGHT,WIDTH), np.bool))
+  root.utility = float('inf') # Utility of this action
   
   for nodes in permutations:
-    #cur_rot = None
-    #cur_type = None
     cur_parent = root
-    prev_p = None
-    first = True
+    board = np.zeros((HEIGHT,WIDTH), np.bool)
     for p in nodes:
-      if first:
-        root.children[p.ptype] = PNode(root, p.ptype)
-        cur_parent = root.children[p.ptype].children
-        prev_p = p
-        first = False
-      else:
-        dnode = DNode(prev_p.rotation, prev_p.h, prev_p.w)
-        pnode = PNode(root, p.ptype)
-        cur_parent[dnode] = pnode
-        cur_parent = pnode.children
-    
-      # cur_pnode = cur_parent.children[p.ptype]
+      board = np.logical_or(board, p.data)
+      s = State(cur_parent, board)
+      a = p.get_action()
       
-      # Create a PNode and place it on the tree
-      # if cur_parent.children[p.ptype] is None:
-        # cur_pnode = PNode(cur_parent, p.ptype)
-        # cur_parent.children[p.ptype] = cur_pnode
-      
-      # Create a DNode and place it on the tree    
-      # cur_dnode = DNode(cur_pnode, p.rotation, p.h, p.w)
-      # cur_pnode.children.add(cur_dnode)
-      
-      # cur_parent = cur_dnode
-
-      
-    
-      # if p.ptype != cur_type:
-        # cur_type = p.ptype
-        
-      # if p.rotation != cur_rot:
-        # cur_rot = p.rotation
-       
-      # child_node = cur_node.children[cur_rot][cur_type]
-       
-      # if child_node is None:
-        # child_node = DNode(cur_node)
+      cur_parent.actions[a.piece][a] = s
+      cur_parent = s
+   
+  print "Tree created."
+  if args.out_t:
+    pickle.dump(combinations, open(args.out_t,'wb'))
+    print "Output saved to '%s'." % args.out_t
   
   # Enter an interactive shell
-  #import readline # optional, will allow Up/Down/History in the console
-  import code
-  vars = globals().copy()
-  vars.update(locals())
-  shell = code.InteractiveConsole(vars)
-  shell.interact()
-    
-def print_tree(root, depth):
-  print "Depth: %d" % depth
-  if depth == 0:
-    print root
-  for c in root.children:
-    print c
-    time.sleep(1)
-    print_tree(c, depth+1)
+  # import code
+  # vars = globals().copy()
+  # vars.update(locals())
+  # shell = code.InteractiveConsole(vars)
+  # shell.interact()
   
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
@@ -556,12 +446,14 @@ if __name__ == "__main__":
     default='possible.p', help='save possible combinations [default: possible.p]')
   pout.add_argument('--out-v', metavar='OUT_V', type=str,
     default='valid.p', help='save valid permutations [default: valid.p]')
+  pout.add_argument('--out-t', metavar='OUT_T', type=str,
+    default='tree.p', help='save generated tree [default: tree.p]')
     
   args = parser.parse_args()
 
   WIDTH  = args.width   # Width of board
   HEIGHT = args.height  # Height of board
-  PIECES = (WIDTH * HEIGHT) / 4
+  PIECES_FIT = (WIDTH * HEIGHT) / 4
   
   if args.in_p:
     p = pickle.load( open(args.in_p,'rb') )
