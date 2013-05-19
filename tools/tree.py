@@ -1,5 +1,48 @@
+from piece_definitions import PIECES
 import numpy as np
 import collections
+
+# TODO: TEMP FIX, PLEASE UNDO
+WIDTH = 4   # Default width
+HEIGHT = 4  # Default height
+
+# Error raised when offset function cannot fit piece in
+class PieceNotFitError(ValueError):
+  pass
+    
+#
+#   |
+# ^ |
+# h |
+#   |
+#   |____________
+#  0     w >
+#
+# The offset function attempts to place a smaller 2D-array "a" in a HEIGHT*WIDTH
+# sized 2D-array with offsets of "h" and "w" as per the diagram above.
+def offset(a, h, w):
+  a_height = a.shape[0]
+  a_width = a.shape[1]
+
+  if (a_height + h) > HEIGHT or (a_width + w) > WIDTH:
+    raise PieceNotFitError, "Shape with given offset cannot fit within dimensions"
+  
+  rows = []
+  
+  start_height = HEIGHT - (h + a_height)
+  end_height = start_height + a_height
+  
+  for i in range(HEIGHT):
+    if i >= start_height and i < end_height:
+      rows.append([False]*w + list(a[i - start_height]) + [False]*(WIDTH - w - a_width))
+    else:
+      rows.append([False]*WIDTH)
+      
+  return np.array(rows)
+  
+# The get_piece function returns an piece with the appropriate rotation
+def get_piece(type, rotation):
+  return np.rot90(PIECES[type], rotation)
 
 # Action represents an action
 class Action(object):
