@@ -1,3 +1,6 @@
+# tree_generator was written with Python 2.7.4.
+# The pickle files it produces should not be read with a version of
+# Python less than 2.7.4, as they are not forwards compatible.
 from piece_definitions import PIECES
 import numpy as np
 import sys
@@ -14,13 +17,20 @@ import cPickle as pickle
 
 WIDTH = 4   # Default width
 HEIGHT = 4  # Default height
+BOARD = Board(HEIGHT, WIDTH)
 PIECES_FIT = (WIDTH * HEIGHT) / 4 # Number of pieces that can fit in board
 NUM_PIECES = len(PIECES)
 NOTIFY_INTERVAL = 10 # Number of seconds between progress notification
 UNICODE = True # Unicode support is present in system
 
 args = None
-      
+
+# The print_multi_board function prints out a representation of the [0..inf]
+# 2D-array as a set of HEIGHT*WIDTH capital letters (or # if nothing is there).      
+def print_multi_board(a):
+  for row in a:
+    print(''.join(['#' if e == 0 else chr(64 + e) for e in row]))
+    
 # The print_board function prints out a representation of the [True, False]
 # 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares (or ASCII if there is no support).
 def print_board(a):
@@ -151,7 +161,7 @@ def calculate_positions():
       for h in range(HEIGHT):
         for w in range(WIDTH):
           try:
-            op = DAction(n, r, h, w)
+            op = DAction(BOARD, n, r, h, w)
             possibilities.append(op)
           except PieceNotFitError:
             pass
@@ -279,6 +289,16 @@ def calculate_valid(possibilities):
     pickle.dump(combinations, open(args.out_v,'wb'))
     print "Output saved to '%s'." % args.out_v
     
+  # for c in combinations:
+    # found = False
+    # for e in c:
+      # if e.piece in [5, 6] or found:
+        # found = True
+        # break
+    # if found:
+      # print_multi_board(to_byte_matrix(c))
+      # print
+    
   combinations.sort()
   create_tree(combinations)
   
@@ -288,15 +308,15 @@ def create_tree(permutations):
   print "Converting %d permutations into decision tree." % len(permutations)
   
   # Create root tree node. It has no parent and maximal utility.
-  root = State(None, np.zeros((HEIGHT,WIDTH), np.bool))
+  root = State(BOARD, None, np.zeros((HEIGHT,WIDTH), np.bool))
   root.utility = float('inf') # Utility of this action
   
   for nodes in permutations:
     cur_parent = root
-    board = np.zeros((HEIGHT,WIDTH), np.bool)
+    board_state = np.zeros((HEIGHT,WIDTH), np.bool)
     for p in nodes:
-      board = np.logical_or(board, p.data)
-      s = State(cur_parent, board)
+      board_state = np.logical_or(board_state, p.data)
+      s = State(BOARD, cur_parent, board_state)
       a = p.get_action()
       
       cur_parent.actions[a.piece][a] = s
@@ -342,7 +362,12 @@ if __name__ == "__main__":
 
   WIDTH  = args.width   # Width of board
   HEIGHT = args.height  # Height of board
+  BOARD = Board(HEIGHT, WIDTH)
   PIECES_FIT = (WIDTH * HEIGHT) / 4
+  
+  if sys.version_info[:3] != (2, 7, 4):
+    print "WARNING: This program was designed to work on Python 2.7.4."
+    print "         Not using that version could cause pickle compatibility issues."
   
   if args.in_p:
     p = pickle.load( open(args.in_p,'rb') )
