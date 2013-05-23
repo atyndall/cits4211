@@ -61,44 +61,43 @@ class Board(object):
     return board
   
   # Represents the utility of a current matrix boolean
+  # Modification of Nathan's utility function in utility.py
   def utility(self, board):
-    return float('-inf')
-      # # UTILITY_OF_ROW = -100
-      # UTILITY_ADJACENT_TO_BLOCK = 1
-      # UTILITY_ADJACENT_TO_WALL = 10
-      # UTILITY_ADJACENT_TO_FLOOR = 1
-      # UTILITY_HOLE = -80
+    if np.all(board): # A filled board has infinite utility
+      return float('inf')
+  
+    UTILITY_ADJACENT_TO_BLOCK = 1
+    UTILITY_ADJACENT_TO_WALL = 10
+    UTILITY_ADJACENT_TO_FLOOR = 1
+    UTILITY_HOLE = -80
 
-      # utility = 0
+    utility = 0
 
-      # for row in range(0, self._height):
-          # # utility += UTILITY_OF_ROW
-          # for column in range(0, self._width):
-              # if board[row, column]:
-                  # positions = ((row - 1, column),
-                               # (row + 1, column),
-                               # (row, column - 1),
-                               # (row, column + 1))
-                  # for pos in positions:
-                      # if board.is_wall(pos[1]):
-                          # utility += UTILITY_ADJACENT_TO_WALL
-                      # elif board.is_floor(pos[0]):
-                          # utility += UTILITY_ADJACENT_TO_FLOOR
-                      # elif board.block_at(pos[0], pos[1]):
-                          # utility += UTILITY_ADJACENT_TO_BLOCK
-              # else:
-                  # # check for holes
-                  # for i in range(row + 1, board.get_num_rows()):
-                      # if board.block_at(i, column):
-                          # utility += UTILITY_HOLE
-                          # break;
-                      # # end if
-                  # # end for i
-              # # end if
-          # # end for column
-      # # end for row
+    for row in range(0, self._height):
+      for column in range(0, self._width):
+        if board[row, column]:
+          positions = ((row - 1, column),
+                       (row + 1, column),
+                       (row, column - 1),
+                       (row, column + 1))
+          for pos in positions:
+            try:
+              if pos[1] == -1 or pos[1] == self._width:
+                  utility += UTILITY_ADJACENT_TO_WALL
+              elif pos[0] == -1:
+                  utility += UTILITY_ADJACENT_TO_FLOOR
+              elif board[pos[0], pos[1]]:
+                  utility += UTILITY_ADJACENT_TO_BLOCK
+            except IndexError:
+              pass
+        else:
+          # check for holes
+          for i in range(row + 1, self._height):
+            if board[i, column]:
+              utility += UTILITY_HOLE
+              break;
 
-      # return utility
+    return utility
       
   # Returns a unique hash for each matrix' dimensions
   # Hash is only unique for matricies of the same dimension
@@ -172,7 +171,7 @@ class State(object):
     self._bhash = board.matrix_hash(board_state) # Stores unique representation of state
 
   def __repr__(self):
-    return "S(%s, u:%.2f)" % (hex(self.__hash__())[2:-1], self.utility)
+    return "S(%s, u:%.2f, mu:%.2f)" % (hex(self.__hash__())[2:-1], self.utility, self.max_utility)
 
   def __hash__(self):
     s = "%d%d" %(id(self.parent), self._bhash)
