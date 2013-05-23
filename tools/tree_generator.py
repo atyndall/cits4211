@@ -213,7 +213,12 @@ def time_output(s):
 # successfully fit together.
 def calculate_possible(positions): 
   lp = len(positions)
-  search_space = factorial(lp) / ( factorial(lp-PIECES_FIT) * factorial(PIECES_FIT) )
+
+  search_space = 0
+  iterables = []
+  for i in range(PIECES_FIT):
+    search_space = search_space + ( factorial(lp) / ( factorial(lp-(PIECES_FIT-i)) * factorial(PIECES_FIT-i) ) )
+    iterables.append(itertools.combinations(positions, PIECES_FIT-i))
   
   print "Calculating possible combinations of tetrominoes from all placements (%d combinations)." % search_space
   start_time = time.time()
@@ -221,9 +226,10 @@ def calculate_possible(positions):
   combinations = []
   timer = time.time()
   prev_i = 0
+
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   #for i, res in enumerate( itertools.imap(check_possibility, itertools.combinations(positions, PIECES_FIT)) ):
-  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.combinations(positions, PIECES_FIT), max(5, search_space/500)) ):
+  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.chain(*iterables), max(5, search_space/500)) ):
     if res:
       combinations.append(res)
     elapsed = time.time() - timer
@@ -235,7 +241,7 @@ def calculate_possible(positions):
   pool.terminate()
     
   lc = len(combinations)   
-  print "There are %d possible combinations of %d tetrominoes within the %d positions." % (lc, PIECES_FIT, search_space)
+  print "There are %d possible combinations of a maximum of %d tetrominoes within the %d positions." % (lc, PIECES_FIT, search_space)
   print "The calculation took %s." % time_output(time.time() - start_time)
   if args.out_p:
     pickle.dump(combinations, open(args.out_p,'wb'))
@@ -270,7 +276,7 @@ def calculate_valid(possibilities):
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   for possibility in possibilities:
     # We permute every combination to work out the orders in which it would be valid
-    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, PIECES_FIT), max(5,search_space/20)) ):
+    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, len(possibility)), max(5,search_space/20)) ):
       if res:
         combinations.append(res)
             
@@ -283,7 +289,7 @@ def calculate_valid(possibilities):
   pool.terminate()
     
   lc = len(combinations)   
-  print "There are %d valid permutations of %d tetrominoes within the %d possibilities." % (lc, PIECES_FIT, search_space)
+  print "There are %d valid permutations of a maximum of %d tetrominoes within the %d possibilities." % (lc, PIECES_FIT, search_space)
   print "The calculation took %s." % time_output(time.time() - start_time)
   if args.out_v:
     pickle.dump(combinations, open(args.out_v,'wb'))
@@ -311,17 +317,35 @@ def create_tree(permutations):
   root = State(BOARD, None, np.zeros((HEIGHT,WIDTH), np.bool))
   root.utility = float('inf') # Utility of this action
   
+  # Terminal nodes are used to reverse traverse the tree to calculate the max_utility
+  term_nodes = []
+  
+  print "Calculating utilities."
   for nodes in permutations:
     cur_parent = root
     board_state = np.zeros((HEIGHT,WIDTH), np.bool)
-    for p in nodes:
+    for i, p in enumerate(nodes):
       board_state = np.logical_or(board_state, p.data)
       s = State(BOARD, cur_parent, board_state)
       a = p.get_action()
       
       cur_parent.actions[a.piece][a] = s
       cur_parent = s
-   
+    
+    # cur_parent is the terminal node
+    cur_parent.max_utility = cur_parent.utility # The maximum utility of a terminal node is itself
+    cur_parent.actions = None # Terminal node has no further actions
+    term_nodes.append(cur_parent)
+  
+  # Reverse traverse the tree to calculate the max_utility
+  print "Calculating max utilities."
+  for n in term_nodes:
+    while n.parent is not None:
+      c = n
+      n = n.parent
+      if c.max_utility > n.max_utility:
+        n.max_utility = c.max_utility
+        
   print "Tree created."
   if args.out_t:
     pickle.dump(root, open(args.out_t,'wb'))
