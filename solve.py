@@ -84,14 +84,27 @@ def get_solution_height(solution, width):
         b.apply_move(move)
     return b.get_num_rows()
 
-def review(seed, num_tests, num_pieces_per_test, width, buffer_size):
+def get_solution_max_height(solution, width):
+    b = board.Board(width)
+    max_height = 0
+    for move in solution:
+        b.apply_move(move)
+        if b.get_num_rows() > max_height:
+            max_height = b.get_num_rows()
+    return max_height
+
+def get_random_pieces(seed, num_piece_groups, num_pieces_per_groud):
     random.seed(seed)
     pieces = []
-    for i in range(0, num_tests):
+    for i in range(0, num_piece_groups):
         piece_set = []
-        for j in range(0, num_pieces_per_test):
+        for j in range(0, num_pieces_per_groud):
             piece_set.append(random.randint(1, 7))
         pieces.append(piece_set)
+    return pieces
+
+def review(seed, num_tests, num_pieces_per_test, width, buffer_size):
+    pieces = get_random_pieces(seed, num_tests, num_pieces_per_test)
     dictionary = {}
     for a in range(-20, -100, -20):
         for b in range(-20, -100, -20):
@@ -119,7 +132,8 @@ def review(seed, num_tests, num_pieces_per_test, width, buffer_size):
         
     
 def test():
-    review(1, 2, 30, 11, 1)
-    #s = get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1,
-    #                 utility.utility_function_a, True)
-    #print(get_solution_height(s, 11))
+    #review(1, 2, 30, 11, 1)
+    s = get_solution(get_random_pieces(112312312, 1, 1000)[0], 11, 1,
+                     utility.variable_alpha(-100, -80, 10, 3, 1), False)
+    print(get_solution_height(s, 11))
+    print(get_solution_max_height(s, 11))
