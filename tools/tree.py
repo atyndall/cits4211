@@ -1,4 +1,5 @@
 from piece_definitions import PIECES
+from helper import *
 import numpy as np
 import collections
 
@@ -165,14 +166,19 @@ class State(object):
     # self.actions[piece_type][action]
     self.actions = collections.defaultdict(dict)
     self.board = board
+    self._board_state = board_state
     self.parent = parent # Parent state
     self.utility = board.utility(board_state) # Utility of this state
     self.max_utility = float('-inf') # Maximum utility of the actions under this state
     self._bhash = board.matrix_hash(board_state) # Stores unique representation of state
 
   def __repr__(self):
-    return "S(%s, u:%.2f, mu:%.2f)" % (hex(self.__hash__())[2:-1], self.utility, self.max_utility)
+    return "S(%s, u:%.0f, mu:%.0f)" % (hex(self.__hash__())[2:-1], self.utility, self.max_utility)
 
   def __hash__(self):
     s = "%d%d" %(id(self.parent), self._bhash)
     return int(s)
+    
+  def view_board(self):
+    print_board(self._board_state)
+    

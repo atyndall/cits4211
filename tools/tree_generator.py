@@ -13,6 +13,7 @@ import hashlib
 from math import factorial
 from rect import Rect
 from tree import *
+from helper import *
 import cPickle as pickle
 
 WIDTH = 4   # Default width
@@ -21,41 +22,8 @@ BOARD = Board(HEIGHT, WIDTH)
 PIECES_FIT = (WIDTH * HEIGHT) / 4 # Number of pieces that can fit in board
 NUM_PIECES = len(PIECES)
 NOTIFY_INTERVAL = 10 # Number of seconds between progress notification
-UNICODE = True # Unicode support is present in system
 
 args = None
-
-# The print_multi_board function prints out a representation of the [0..inf]
-# 2D-array as a set of HEIGHT*WIDTH capital letters (or # if nothing is there).      
-def print_multi_board(a):
-  for row in a:
-    print(''.join(['#' if e == 0 else chr(64 + e) for e in row]))
-    
-# The print_board function prints out a representation of the [True, False]
-# 2D-array as a set of HEIGHT*WIDTH empty and filled Unicode squares (or ASCII if there is no support).
-def print_board(a):
-  global UNICODE
-  for row in a:
-    if UNICODE:
-      try:
-        print(''.join([unichr(9632) if e else unichr(9633) for e in row]))
-        continue
-      except UnicodeEncodeError: # Windows compatibility
-        UNICODE = False
-
-    print(''.join(['#' if e else '0' for e in row])) 
- 
-# The rall function recursively checks that all lists and sublists of element "a"
-# have a True value, otherwise it returns False. 
-def rall(a):
-  for i in a:
-    if isinstance(i, collections.Iterable):
-      if not rall(i):
-        return False 
-    elif not i:
-      return False
-      
-  return True
   
 # The adjacent function returns a 2D-array of all blocks that are vertically adjacent
 # to the given 2D-array "a".
@@ -322,29 +290,72 @@ def create_tree(permutations):
   
   print "Calculating utilities."
   for nodes in permutations:
+    actions = []
+    parents = []
+    children = []
     cur_parent = root
     board_state = np.zeros((HEIGHT,WIDTH), np.bool)
     for i, p in enumerate(nodes):
       board_state = np.logical_or(board_state, p.data)
-      s = State(BOARD, cur_parent, board_state)
       a = p.get_action()
+      actions.append(a)
       
-      cur_parent.actions[a.piece][a] = s
-      cur_parent = s
+      if a not in cur_parent.actions[a.piece].keys(): # Make sure we don't override the state node
+        s = State(BOARD, cur_parent, board_state)
+        # print "%s{%s}.actions[%d][%s] = %s{%s}" % (cur_parent, hex(id(cur_parent)), a.piece, a, s, hex(id(s)))
+        cur_parent.actions[a.piece][a] = s
+        cur_parent = s
+      else:
+        cur_parent = cur_parent.actions[a.piece][a]
+   
+    # Get list of memory references when traversing downwards
+    cur_state = root
+    drilldown = []
+    for a in actions:
+      drilldown.append(id(cur_state))
+      cur_state = cur_state.actions[a.piece][a]
+    drilldown.append(id(cur_state))
+    drilldown.reverse()
     
-    # cur_parent is the terminal node
+    # Get list of memory references when traversing upwards
+    cur_state = cur_parent
+    i = 0
+    drillup = []
+    while cur_state.parent is not None and i <= PIECES_FIT:
+      drillup.append(id(cur_state))
+      cur_state = cur_state.parent
+      i += 1
+    drillup.append(id(cur_state))
+    
+    # Sanity check to ensure that parent->children == children->parent
+    if not (drillup == drilldown):
+      print "Uh oh, something is wrong!"
+      print drilldown
+      print drillup
+      print
+    
+    # cur_parent is the terminal node (at least currently)
     cur_parent.max_utility = cur_parent.utility # The maximum utility of a terminal node is itself
-    cur_parent.actions = None # Terminal node has no further actions
     term_nodes.append(cur_parent)
   
   # Reverse traverse the tree to calculate the max_utility
   print "Calculating max utilities."
   for n in term_nodes:
+    i = 0
     while n.parent is not None:
       c = n
       n = n.parent
+      
       if c.max_utility > n.max_utility:
         n.max_utility = c.max_utility
+        
+      i += 1
+      if i > PIECES_FIT:
+        break
+        print "We seem to be stuck in a loop, exiting"
+        
+    if n != root:
+      print "Something is very wrong. The final node isn't the parent."
         
   print "Tree created."
   if args.out_t:
