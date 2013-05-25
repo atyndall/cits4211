@@ -98,6 +98,7 @@ def valid(p, a):
 def calculate_positions():  
   print 'Computing all possible orientations and positions of given tetrominoes on %dx%d grid.' % (WIDTH, HEIGHT)
   possibilities = []
+  i = 0
   for n, p in enumerate(PIECES):
     options = []
     p_width = len(p[0])
@@ -129,19 +130,30 @@ def calculate_positions():
       for h in range(HEIGHT):
         for w in range(WIDTH):
           try:
+            i += 1
             op = DAction(BOARD, n, r, h, w)
             possibilities.append(op)
           except PieceNotFitError:
             pass
-
+  print i
   lp = len(possibilities)
   print "There are %d possible orientations and positions for the given tetrominoes." % lp
 
   calculate_possible(possibilities)
- 
+
+# Simple iterator that outputs the HEIGHT and WIDTH for our multiprocessing functions
+def hw_iterator():
+  while True:
+    yield (HEIGHT, WIDTH)
+  
 # Check possibility
-def check_possibility(cur_pieces):
-  global PIECES
+def check_possibility(data):
+  global PIECES, HEIGHT, WIDTH
+  hw, cur_pieces = data
+  height, width = hw
+  HEIGHT = height
+  WIDTH = width
+
   board = np.zeros((HEIGHT, WIDTH), np.bool)
 
   indr = [] # List of coordinate pairs of all pieces
@@ -197,7 +209,7 @@ def calculate_possible(positions):
 
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   #for i, res in enumerate( itertools.imap(check_possibility, itertools.combinations(positions, PIECES_FIT)) ):
-  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.chain(*iterables), max(5, search_space/500)) ):
+  for i, res in enumerate( pool.imap_unordered(check_possibility, itertools.izip(hw_iterator(), itertools.chain(*iterables)), max(5, search_space/500)) ):
     if res:
       combinations.append(res)
     elapsed = time.time() - timer
@@ -218,7 +230,13 @@ def calculate_possible(positions):
   calculate_valid(combinations)
     
 # Check validity
-def check_validity(pieces):
+def check_validity(data):
+  global HEIGHT, WIDTH
+  hw, pieces = data
+  height, width = hw
+  HEIGHT = height
+  WIDTH = width
+  
   board = np.zeros((HEIGHT, WIDTH), np.bool)
   pos = True  
   for p in pieces:
@@ -241,12 +259,15 @@ def calculate_valid(possibilities):
   combinations = []
   timer = time.time()
   prev_i = 0
+  counter = 0
   pool = multiprocessing.Pool() # Use multiple processes to leaverage maximum processing power
   for possibility in possibilities:
     # We permute every combination to work out the orders in which it would be valid
-    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.permutations(possibility, len(possibility)), max(5,search_space/20)) ):
+    #for i, res in enumerate( itertools.imap(check_validity, itertools.permutations(possibility, len(possibility))) ):
+    for i, res in enumerate( pool.imap_unordered(check_validity, itertools.izip(hw_iterator(), itertools.permutations(possibility, len(possibility))), max(5,search_space/20)) ):
       if res:
         combinations.append(res)
+      counter += 1
             
       elapsed = time.time() - timer
       if elapsed > NOTIFY_INTERVAL and i != 0: # If x seconds have elapsed
@@ -255,6 +276,8 @@ def calculate_valid(possibilities):
         prev_i = i
         timer = time.time()
   pool.terminate()
+    
+  print counter
     
   lc = len(combinations)   
   print "There are %d valid permutations of a maximum of %d tetrominoes within the %d possibilities." % (lc, PIECES_FIT, search_space)
@@ -337,7 +360,7 @@ def create_tree(permutations):
     # cur_parent is the terminal node (at least currently)
     cur_parent.max_utility = cur_parent.utility # The maximum utility of a terminal node is itself
     term_nodes.append(cur_parent)
-  
+
   # Reverse traverse the tree to calculate the max_utility
   print "Calculating max utilities."
   for n in term_nodes:
