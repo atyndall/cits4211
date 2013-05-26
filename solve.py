@@ -246,7 +246,7 @@ def test():
 
 # tree test
 def tt():
-    return tree_get_solution(get_random_pieces(12123312, 10, 30)[0], 12, 1)
+    return tree_get_solution(get_random_pieces(12123312, 10, 30)[0], 11, 1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tetris AI program')
@@ -266,7 +266,6 @@ if __name__ == "__main__":
                         default=False, help="Whether to visualise the program")
 
     args = parser.parse_args()
-    print args.yar
     if args.method == 1:
         s = get_solution(get_pieces_from_file(args.input), args.width,
                          args.buffer_size,
