@@ -68,9 +68,9 @@ class Board(object):
       return float('inf')
   
     UTILITY_ADJACENT_TO_BLOCK = 1
-    UTILITY_ADJACENT_TO_WALL = 10
-    UTILITY_ADJACENT_TO_FLOOR = 1
-    UTILITY_HOLE = -80
+    UTILITY_ADJACENT_TO_WALL = 3
+    UTILITY_ADJACENT_TO_FLOOR = 10
+    UTILITY_HOLE = -1000
 
     utility = 0
 

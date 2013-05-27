@@ -4,6 +4,7 @@ import random
 import operator
 import pickle
 import argparse
+import numpy as np
 
 import board
 import move
@@ -177,21 +178,24 @@ def load_trees(width):
     else:
         return load_trees(width - 4) + [get_tree4()]
     
-def tree_get_best_action(trees, pieces):
+def tree_get_best_action(trees, times_filled, pieces):
     best_action = None
     best_utility = None
     for i in range(0, len(trees)):
         tree = trees[i]
         for piece in pieces:
-            for action in tree.actions[piece]:
-                state = tree.actions[piece][action]
-                if best_utility == None or best_utility < state.max_utility:
-                    best_utility = state.max_utility
+            for action in tree.actions[piece - 1]:
+                state = tree.actions[piece - 1][action]
+                u = state.utility - (times_filled[i] * 1000)
+                if best_utility == None or best_utility < u:
+                    best_utility = u
                     best_action = (i, action)
+    print best_utility
     return best_action
 
 def tree_get_solution(pieces, width, buffer_size):
     trees = load_trees(width)
+    times_filled = [0, 0, 0] # stores how many times each tree has been replaced
     buffer_size += 1
     piece_buffer = []
     if len(pieces) <= buffer_size:
@@ -206,10 +210,22 @@ def tree_get_solution(pieces, width, buffer_size):
     # converted into a Move object and added to solution
     while piece_buffer:
         print piece_buffer
-        a = tree_get_best_action(trees, piece_buffer)
+        
+        a = tree_get_best_action(trees, times_filled, piece_buffer)
         if a == None:
-            print("Best action returned is none, breaking loop")
-            break
+            print("Best action returned is none, adding more trees")
+            for i in range(0, len(trees)):
+                tree = trees[i]
+                print "Trees[{0}] is being replaced".format(i)
+                times_filled[i] += 1
+                print times_filled
+                if tree.board._width == 3:
+                    trees[i] = get_tree3()
+                elif tree.board._width == 4:
+                    trees[i] = get_tree4()
+                elif tree.board._width == 5:
+                        trees[i] = get_tree5()
+            continue
         best_action = a[1]
         a_tree = a[0]
         
@@ -224,12 +240,25 @@ def tree_get_solution(pieces, width, buffer_size):
         column = best_action.w
         for i in range(0, a_tree):
             column += trees[i].board._width
-        m = move.Move(best_action.piece, best_action.rotation, column)
+        m = move.Move(best_action.piece + 1, best_action.rotation, column)
         solution.append(m)
         #
-        piece_buffer.remove(best_action.piece)
+        piece_buffer.remove(best_action.piece + 1)
         if pieces:
             piece_buffer.append(pieces.pop(0))
+        # if tree is complete, replace it with a fresh one
+        for i in range(0, len(trees)):
+            tree = trees[i]
+            if np.all(tree._board_state):
+                print "Trees[{0}] is full, replacing it".format(i)
+                times_filled[i] += 1
+                print times_filled
+                if tree.board._width == 3:
+                    trees[i] = get_tree3()
+                elif tree.board._width == 4:
+                    trees[i] = get_tree4()
+                elif tree.board._width == 5:
+                    trees[i] = get_tree5()
     return solution
     
     
@@ -246,7 +275,7 @@ def test():
 
 # tree test
 def tt():
-    return tree_get_solution(get_random_pieces(12123312, 10, 30)[0], 11, 1)
+    return tree_get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tetris AI program')
