@@ -186,8 +186,14 @@ def tree_get_best_action(trees, times_filled, pieces):
         for piece in pieces:
             for action in tree.actions[piece - 1]:
                 state = tree.actions[piece - 1][action]
-                u = state.utility - (times_filled[i] * 1000)
+                u = state.max_utility - (times_filled[i] * 1000)
                 if best_utility == None or best_utility < u:
+                    best_utility = u
+                    best_action = (i, action)
+                # if 2 trees best action have a max utility of inf, makes sure
+                # the tree that has been filled less is selected
+                elif best_utility == u == float('inf') and \
+                times_filled[i] < times_filled[best_action[0]]:
                     best_utility = u
                     best_action = (i, action)
     print best_utility
@@ -275,7 +281,9 @@ def test():
 
 # tree test
 def tt():
-    return tree_get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1)
+    s = tree_get_solution(get_pieces_from_file("a.txt"), 11, 1)
+    print(get_solution_height(s, 11))
+    print(get_solution_max_height(s, 11))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tetris AI program')
