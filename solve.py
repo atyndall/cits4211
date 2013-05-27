@@ -148,13 +148,19 @@ def review(seed, num_tests, num_pieces_per_test, width, buffer_size, args):
         print("{0} height: {1} max height: {2}".format(item[0], h, mh))
 
 def get_tree3():
-    return pickle.load(open('trees/tree3.p', 'rb'))
+    if not hasattr(get_tree3, "t"):
+        get_tree3.t = pickle.load(open('trees/tree3.p', 'rb'))
+    return copy.deepcopy(get_tree3.t)
 
 def get_tree4():
-    return pickle.load(open('trees/tree4.p', 'rb'))
+    if not hasattr(get_tree4, "t"):
+        get_tree4.t = pickle.load(open('trees/tree4.p', 'rb'))
+    return copy.deepcopy(get_tree4.t)
 
 def get_tree5():
-    return pickle.load(open('trees/tree5.p', 'rb'))
+    if not hasattr(get_tree5, "t"):
+        get_tree5.t = pickle.load(open('trees/tree5.p', 'rb'))
+    return copy.deepcopy(get_tree5.t)
 
 def load_trees(width):
     sys.path.append("tools")
