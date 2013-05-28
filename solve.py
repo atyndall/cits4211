@@ -98,6 +98,12 @@ def get_solution_max_height(solution, width):
             max_height = b.get_num_rows()
     return max_height
 
+def print_solution_board(solution, width):
+    b = board.Board(width)
+    for move in solution:
+        b.apply_move(move)
+    b.print_grid()
+
 def get_random_pieces(seed, num_piece_groups, num_pieces_per_groud):
     random.seed(seed)
     pieces = []
@@ -150,17 +156,20 @@ def review(seed, num_tests, num_pieces_per_test, width, buffer_size, args):
 def get_tree3():
     if not hasattr(get_tree3, "t"):
         get_tree3.t = pickle.load(open('trees/tree3.p', 'rb'))
-    return copy.deepcopy(get_tree3.t)
+        get_tree3.t.utility = 0
+    return copy.copy(get_tree3.t)
 
 def get_tree4():
     if not hasattr(get_tree4, "t"):
         get_tree4.t = pickle.load(open('trees/tree4.p', 'rb'))
-    return copy.deepcopy(get_tree4.t)
+        get_tree4.t.utility = 0
+    return copy.copy(get_tree4.t)
 
 def get_tree5():
     if not hasattr(get_tree5, "t"):
         get_tree5.t = pickle.load(open('trees/tree5.p', 'rb'))
-    return copy.deepcopy(get_tree5.t)
+        get_tree5.t.utility = 0
+    return copy.copy(get_tree5.t)
 
 def load_trees(width):
     sys.path.append("tools")
@@ -192,7 +201,7 @@ def tree_get_best_action(trees, times_filled, pieces):
         for piece in pieces:
             for action in tree.actions[piece - 1]:
                 state = tree.actions[piece - 1][action]
-                u = state.max_utility - (times_filled[i] * 1000)
+                u = state.max_utility #- (times_filled[i] * 1000)
                 if best_utility == None or best_utility < u:
                     best_utility = u
                     best_action = (i, action)
@@ -272,24 +281,90 @@ def tree_get_solution(pieces, width, buffer_size):
                 elif tree.board._width == 5:
                     trees[i] = get_tree5()
     return solution
-    
-    
+
+def tree_search(trees, piece_buffer, pieces, a=0):
+    #print a
+    for i in range(0, len(trees)):
+        tree = trees[i]
+        for piece in piece_buffer:
+            for action in tree.actions[piece - 1]:
+                state = tree.actions[piece - 1][action]
+                if state.max_utility == float("inf"):
+                    nt = copy.copy(trees)
+                    nt[i] = state
+                    npb = copy.copy(piece_buffer)
+                    np = copy.copy(pieces)
+                    npb.remove(action.piece + 1)
+                    if np:
+                        npb.append(np.pop(0))
+                    #print nt
+                    # if all trees are filled
+                    if all(t.utility == float("inf") for t in nt):
+                        #print [action]
+                        return [(i, action)]
+                    #
+                    r = tree_search(nt, npb, np, a+1)
+                    #print "r:"
+                    #print r
+                    #if r is not empty or == None
+                    if r != None and len(r) != 0:
+                        r.append((i, action))
+                        #print r
+                        return r
+    return None
+
+def tree_search_get_solution(pieces, width, buffer_size):
+    print pieces
+    trees = load_trees(width)
+    buffer_size += 1
+    piece_buffer = []
+    if len(pieces) <= buffer_size:
+        piece_buffer = pieces
+        pieces = []
+    else:
+        piece_buffer = pieces[0:buffer_size]
+        pieces = pieces[buffer_size:len(pieces)]
+    solution = []
+    s = tree_search(trees, piece_buffer, pieces)
+    if s == None:
+        print "s == None, no optimal solution found"
+    s.reverse()
+    for i, action in s:
+        column = action.w
+        for i in range(0, i):
+            column += trees[i].board._width
+        m = move.Move(action.piece + 1, action.rotation, column)
+        solution.append(m)
+        # TODO: remove used piece form buffer and add next piece
+        piece_buffer.remove(action.piece + 1)
+        if pieces:
+            piece_buffer.append(pieces.pop(0))
+    print piece_buffer
+    print pieces
+    return solution
+                    
 
 def test():
-    review(1, 2, 10, 11, 1,
-           ((-40, -60, -80, -160), (-40, -60, -80, -160), (1, 2, 4),
-            (1, 2, 4), (1, 2, 4)))
-    return
-    s = get_solution(get_random_pieces(112312312, 1, 1000)[0], 11, 1,
-                     utility.variable_alpha(-100, -80, 10, 3, 1), False)
+    #review(1, 2, 10, 11, 1,
+    #       ((-40, -60, -80, -160), (-40, -60, -80, -160), (1, 2, 4),
+    #        (1, 2, 4), (1, 2, 4)))
+    #return
+    #s = get_solution(get_random_pieces(112312312, 1, 1000)[0], 11, 1,
+    #                 utility.variable_alpha(-100, -80, 10, 3, 1), False)
+    s = get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1,
+                     utility.variable_alpha(-100, -80, 10, 3, 1), True)
     print(get_solution_height(s, 11))
     print(get_solution_max_height(s, 11))
+    print_solution_board(s, 11)
 
 # tree test
 def tt():
-    s = tree_get_solution(get_pieces_from_file("a.txt"), 11, 1)
+    #s = tree_search_get_solution([5,2,5,1,4,6,3,3,5,6,4, 7, 7, 7], 11, 1)
+    s = tree_search_get_solution(get_random_pieces(None, 1, 15)[0], 11, 1)
+    #s = tree_get_solution(get_random_pieces(198, 1, 30)[0], 11, 1)
     print(get_solution_height(s, 11))
     print(get_solution_max_height(s, 11))
+    print_solution_board(s, 11)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tetris AI program')
