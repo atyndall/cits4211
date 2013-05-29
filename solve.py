@@ -482,6 +482,8 @@ if __name__ == "__main__":
         rows_cleared = b.get_rows_cleared()
         final_height = b.get_num_rows()
         num_holes = b.get_num_holes()
+    else:
+        print "No method selected. Use --method 1 or --method 2"
         
     if args.stats_out:
       out_stats(args.stats_out, args.input, args.width, args.buffer_size, args.method, rows_cleared, final_height, num_holes)
