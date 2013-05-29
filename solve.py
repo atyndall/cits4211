@@ -344,7 +344,7 @@ def tree_search(trees, piece_buffer, pieces, a=0):
                         return r
     return None
 
-def tree_search_get_solution(pieces, width, buffer_size, visualize):
+def tree_search_get_solution(pieces, width, buffer_size, visualise):
     print pieces
     b = board.Board(width) # Init a board so we can keep better track of the state
     trees = load_trees(width)
@@ -357,36 +357,42 @@ def tree_search_get_solution(pieces, width, buffer_size, visualize):
         piece_buffer = pieces[0:buffer_size]
         pieces = pieces[buffer_size:len(pieces)]
     solution = []
-    s = tree_search(trees, piece_buffer, pieces)
-    if s == None:
-        print "s == None, no optimal solution found"
-    s.reverse()
-    for i, action in s:
-        column = action.w
-        for i in range(0, i):
-            column += trees[i].board._width
-        m = move.Move(action.piece + 1, action.rotation, column)
+
+    cutoff = 0
+    for tree in trees:
+        cutoff += tree.board._width * tree.board._height / 4
+
+    while len(piece_buffer) + len(pieces) >= cutoff:
+        s = tree_search(trees, piece_buffer, pieces)
+        if s == None:
+            print "s == None, no optimal solution found"
+            # get new solution
+        else:
+            print "Optimal solution found"
+            s.reverse()
+            
+        for i, action in s:
+            column = action.w
+            for i in range(0, i):
+                column += trees[i].board._width
+            m = move.Move(action.piece + 1, action.rotation, column)
+            
+            if visualise:
+                print("best move:")
+                m.print_rep_with_column()
+                print("board before move:")
+                b.print_grid()
+            b.apply_move(m)
+            if visualise:
+                print("grid after move:")
+                b.print_grid()
+                print("-" * 20)
         
-        if visualise:
-            print("best move:")
-            m.print_rep_with_column()
-            print("board before move:")
-            b.print_grid()
-            pass
-        
-        b.apply_move(apply_move)
-        
-        if visualise:
-            print("grid after move:")
-            b.print_grid()
-            print("-" * 20)
-            pass
-        
-        solution.append(m)
-        # TODO: remove used piece form buffer and add next piece
-        piece_buffer.remove(action.piece + 1)
-        if pieces:
-            piece_buffer.append(pieces.pop(0))
+            solution.append(m)
+            
+            piece_buffer.remove(action.piece + 1)
+            if pieces:
+                piece_buffer.append(pieces.pop(0))
     print piece_buffer
     print pieces
     return (b, solution)
@@ -399,7 +405,7 @@ def test():
     #return
     #s = get_solution(get_random_pieces(112312312, 1, 1000)[0], 11, 1,
     #                 utility.variable_alpha(-100, -80, 10, 3, 1), False)
-    s = get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1,
+    b, s = get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1,
                      utility.variable_alpha(-100, -80, 10, 3, 1), True)
     print(get_solution_height(s, 11))
     print(get_solution_max_height(s, 11))
@@ -408,8 +414,8 @@ def test():
 # tree test
 def tt():
     #s = tree_search_get_solution([5,2,5,1,4,6,3,3,5,6,4, 7, 7, 7], 11, 1)
-    s = tree_search_get_solution(get_random_pieces(None, 1, 15)[0], 11, 1)
-    #s = tree_get_solution(get_random_pieces(198, 1, 30)[0], 11, 1)
+    b, s = tree_search_get_solution(get_random_pieces(None, 1, 15)[0], 11, 1, True)
+    #b, s = tree_get_solution(get_random_pieces(198, 1, 30)[0], 11, 1, True)
     print(get_solution_height(s, 11))
     print(get_solution_max_height(s, 11))
     print_solution_board(s, 11)
