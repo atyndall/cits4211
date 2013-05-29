@@ -17,6 +17,7 @@ class Board:
     def __init__(self, width):
         self._width = width
         self._grid = []
+        self._rows_cleared = 0
 
     def copy(self):
         return copy.deepcopy(self)
@@ -26,6 +27,17 @@ class Board:
 
     def get_num_rows(self):
         return len(self._grid)
+        
+    def get_rows_cleared(self):
+        return self._rows_cleared
+      
+    def get_num_holes(self):
+        n = 0
+        for row in reversed(self._grid):
+            for column in row:
+                if not column:
+                    n += 1
+        return n
 
     # Places a block at the indicated row and column
     # Will generate new rows if needed
@@ -70,6 +82,7 @@ class Board:
                 full_lines.append(i)
         for line in reversed(full_lines):
             self._grid.pop(line)
+            self._rows_cleared += 1
 
     # Checks if the piece can be placed on the board with its column.
     # Changes the column to a valid one if it can.

@@ -5,6 +5,9 @@ import operator
 import pickle
 import argparse
 import numpy as np
+import sys
+import time
+import os
 
 import board
 import move
@@ -81,7 +84,7 @@ def get_solution(pieces, width, buffer_size, utility_function, visualise):
         piece_buffer.remove(best_move.get_piece())
         if pieces:
             piece_buffer.append(pieces.pop(0))
-    return solution
+    return (b, solution)
 
 def get_solution_height(solution, width):
     b = board.Board(width)
@@ -153,23 +156,32 @@ def review(seed, num_tests, num_pieces_per_test, width, buffer_size, args):
         mh = max_height_dictionary[item[0]]
         print("{0} height: {1} max height: {2}".format(item[0], h, mh))
 
+def get_tree2():
+    path = 'trees/tree2.p'
+    if sys.platform.startswith('win32'):
+        path = 'trees/tree2_win.p'
+    if not hasattr(get_tree2, "t"):
+        get_tree2.t = pickle.load(open(path, 'rb'))
+        get_tree2.t.utility = 0
+    return copy.copy(get_tree2.t)        
+        
 def get_tree3():
+    path = 'trees/tree3.p'
+    if sys.platform.startswith('win32'):
+        path = 'trees/tree3_win.p'
     if not hasattr(get_tree3, "t"):
-        get_tree3.t = pickle.load(open('trees/tree3.p', 'rb'))
+        get_tree3.t = pickle.load(open(path, 'rb'))
         get_tree3.t.utility = 0
     return copy.copy(get_tree3.t)
 
 def get_tree4():
+    path = 'trees/tree4.p'
+    if sys.platform.startswith('win32'):
+        path = 'trees/tree4_win.p'
     if not hasattr(get_tree4, "t"):
-        get_tree4.t = pickle.load(open('trees/tree4.p', 'rb'))
+        get_tree4.t = pickle.load(open(path, 'rb'))
         get_tree4.t.utility = 0
     return copy.copy(get_tree4.t)
-
-def get_tree5():
-    if not hasattr(get_tree5, "t"):
-        get_tree5.t = pickle.load(open('trees/tree5.p', 'rb'))
-        get_tree5.t.utility = 0
-    return copy.copy(get_tree5.t)
 
 def load_trees(width):
     sys.path.append("tools")
@@ -181,7 +193,7 @@ def load_trees(width):
     elif width == 4:
         return [get_tree4()]
     elif width == 5:
-        return [get_tree5()]
+        return [get_tree2(), get_tree3()]
     elif width == 6:
         return [get_tree3, get_tree3()]
     elif width == 7:
@@ -211,10 +223,11 @@ def tree_get_best_action(trees, times_filled, pieces):
                 times_filled[i] < times_filled[best_action[0]]:
                     best_utility = u
                     best_action = (i, action)
-    print best_utility
+    # print best_utility
     return best_action
 
-def tree_get_solution(pieces, width, buffer_size):
+def tree_get_solution(pieces, width, buffer_size, visualise):
+    b = board.Board(width)
     trees = load_trees(width)
     times_filled = [0, 0, 0] # stores how many times each tree has been replaced
     buffer_size += 1
@@ -230,39 +243,57 @@ def tree_get_solution(pieces, width, buffer_size):
     # from piece_buffer, the next piece is placed, and the best action is
     # converted into a Move object and added to solution
     while piece_buffer:
-        print piece_buffer
+        # print piece_buffer
         
         a = tree_get_best_action(trees, times_filled, piece_buffer)
         if a == None:
-            print("Best action returned is none, adding more trees")
+            # print("Best action returned is none, adding more trees")
             for i in range(0, len(trees)):
                 tree = trees[i]
-                print "Trees[{0}] is being replaced".format(i)
+                # print "Trees[{0}] is being replaced".format(i)
                 times_filled[i] += 1
-                print times_filled
+                # print times_filled
                 if tree.board._width == 3:
                     trees[i] = get_tree3()
                 elif tree.board._width == 4:
                     trees[i] = get_tree4()
-                elif tree.board._width == 5:
-                        trees[i] = get_tree5()
+                elif tree.board._width == 2:
+                        trees[i] = get_tree2()
             continue
         best_action = a[1]
         a_tree = a[0]
         
-        print str(best_action) + " " + str(a_tree)
+        # print str(best_action) + " " + str(a_tree)
         # Applies move to try
         trees[a_tree] = trees[a_tree].actions[best_action.piece][best_action]
-        for tree in trees:
-            print_board(tree._board_state)
-            print("")
-        print("==============================")
+        # for tree in trees:
+            # print_board(tree._board_state)
+            # print("")
+        # print("==============================")
         # Add move to solution
         column = best_action.w
         for i in range(0, a_tree):
             column += trees[i].board._width
+        
         m = move.Move(best_action.piece + 1, best_action.rotation, column)
+        
+        if visualise:
+            print("best move:")
+            m.print_rep_with_column()
+            print("board before move:")
+            b.print_grid()
+            pass
+        
         solution.append(m)
+        b.apply_move(m)
+        
+        if visualise:
+            print("grid after move:")
+            b.print_grid()
+            print("-" * 20)
+            pass
+
+        
         #
         piece_buffer.remove(best_action.piece + 1)
         if pieces:
@@ -278,9 +309,9 @@ def tree_get_solution(pieces, width, buffer_size):
                     trees[i] = get_tree3()
                 elif tree.board._width == 4:
                     trees[i] = get_tree4()
-                elif tree.board._width == 5:
-                    trees[i] = get_tree5()
-    return solution
+                elif tree.board._width == 2:
+                    trees[i] = get_tree2()
+    return (b, solution)
 
 def tree_search(trees, piece_buffer, pieces, a=0):
     #print a
@@ -313,8 +344,9 @@ def tree_search(trees, piece_buffer, pieces, a=0):
                         return r
     return None
 
-def tree_search_get_solution(pieces, width, buffer_size):
+def tree_search_get_solution(pieces, width, buffer_size, visualize):
     print pieces
+    b = board.Board(width) # Init a board so we can keep better track of the state
     trees = load_trees(width)
     buffer_size += 1
     piece_buffer = []
@@ -334,6 +366,22 @@ def tree_search_get_solution(pieces, width, buffer_size):
         for i in range(0, i):
             column += trees[i].board._width
         m = move.Move(action.piece + 1, action.rotation, column)
+        
+        if visualise:
+            print("best move:")
+            m.print_rep_with_column()
+            print("board before move:")
+            b.print_grid()
+            pass
+        
+        b.apply_move(apply_move)
+        
+        if visualise:
+            print("grid after move:")
+            b.print_grid()
+            print("-" * 20)
+            pass
+        
         solution.append(m)
         # TODO: remove used piece form buffer and add next piece
         piece_buffer.remove(action.piece + 1)
@@ -341,7 +389,7 @@ def tree_search_get_solution(pieces, width, buffer_size):
             piece_buffer.append(pieces.pop(0))
     print piece_buffer
     print pieces
-    return solution
+    return (b, solution)
                     
 
 def test():
@@ -365,6 +413,19 @@ def tt():
     print(get_solution_height(s, 11))
     print(get_solution_max_height(s, 11))
     print_solution_board(s, 11)
+    
+def out_stats(file, input, width, buffersize, method, rows_cleared, final_height, num_holes):
+    print
+    print "STATS"
+    print "Rows cleared: %d" % rows_cleared
+    print "Final height: %d" % final_height
+    print "Number of holes: %d" % num_holes
+
+    exists = os.path.exists(file)
+    with open(file, 'a') as f:
+      if not exists:
+        f.write("curtime,input,width,buffersize,method,rows_cleared,final_height,num_holes\n")
+      f.write("%d,%s,%d,%d,%d,%d,%d,%d\n" % (int(round(time.time() * 1000)), input, width, buffersize, method, rows_cleared, final_height, num_holes))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tetris AI program')
@@ -379,20 +440,38 @@ if __name__ == "__main__":
     parser.add_argument('--width', metavar='WIDTH', type=int, default=11,
                         help="The width of the board")
     parser.add_argument('--buffer-size', metavar='BUFFER-SIZE', type=int,
-                        default=11, help="The buffer size")
+                        default=1, help="The buffer size")
     parser.add_argument('--visualise', metavar='VISUALISE', type=bool,
                         default=False, help="Whether to visualise the program")
-
+    parser.add_argument('--stats-out', metavar='STATS-OUT', default="stats.csv",
+                        help="Output stats CSV file")
+                        
     args = parser.parse_args()
+    
+    rows_cleared = 0
+    final_height = 0
+    num_holes = 0
+    
     if args.method == 1:
-        s = get_solution(get_pieces_from_file(args.input), args.width,
+        b, s = get_solution(get_pieces_from_file(args.input), args.width,
                          args.buffer_size,
                          utility.variable_alpha(-100, -80, 10, 3, 1),
                          args.visualise)
         write_solution_to_file(s, args.output)
+        
+        rows_cleared = b.get_rows_cleared()
+        final_height = b.get_num_rows()
+        num_holes = b.get_num_holes()
     elif args.method == 2:
-        s = tree_get_solution(get_pieces_from_file(args.input), args.width,
-                          args.buffer_size)
+        b, s = tree_get_solution(get_pieces_from_file(args.input), args.width,
+                          args.buffer_size, args.visualise)
         write_solution_to_file(s, args.output)
+        
+        rows_cleared = b.get_rows_cleared()
+        final_height = b.get_num_rows()
+        num_holes = b.get_num_holes()
+        
+    if args.stats_out:
+      out_stats(args.stats_out, args.input, args.width, args.buffer_size, args.method, rows_cleared, final_height, num_holes)
     
     
