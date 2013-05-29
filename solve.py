@@ -403,10 +403,10 @@ def test():
     #       ((-40, -60, -80, -160), (-40, -60, -80, -160), (1, 2, 4),
     #        (1, 2, 4), (1, 2, 4)))
     #return
-    #s = get_solution(get_random_pieces(112312312, 1, 1000)[0], 11, 1,
-    #                 utility.variable_alpha(-100, -80, 10, 3, 1), False)
-    b, s = get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1,
-                     utility.variable_alpha(-100, -80, 10, 3, 1), True)
+    b, s = get_solution(get_random_pieces(None, 1, 1000)[0], 11, 1,
+                        utility.variable_alpha(-100, -80, 10, 3, 1), False)
+    #b, s = get_solution(get_pieces_from_file("exampleinput.txt"), 11, 1,
+    #                 utility.variable_alpha(-100, -80, 10, 3, 1), True)
     print(get_solution_height(s, 11))
     print(get_solution_max_height(s, 11))
     print_solution_board(s, 11)
@@ -448,7 +448,7 @@ if __name__ == "__main__":
     parser.add_argument('--buffer-size', metavar='BUFFER-SIZE', type=int,
                         default=1, help="The buffer size")
     parser.add_argument('--visualise', metavar='VISUALISE', type=bool,
-                        default=False, help="Whether to visualise the program")
+                        default=False, help="Whether to visualise each move in the solution. Must be true or false")
     parser.add_argument('--stats-out', metavar='STATS-OUT', default="stats.csv",
                         help="Output stats CSV file")
                         
@@ -459,23 +459,31 @@ if __name__ == "__main__":
     num_holes = 0
     
     if args.method == 1:
-        b, s = get_solution(get_pieces_from_file(args.input), args.width,
+        print "Getting pieces from {0}".format(args.input)
+        p = get_pieces_from_file(args.input)
+        print "Calculating solution"
+        b, s = get_solution(p, args.width,
                          args.buffer_size,
                          utility.variable_alpha(-100, -80, 10, 3, 1),
                          args.visualise)
+        print "Writting solution to {0}".format(args.output)
         write_solution_to_file(s, args.output)
-        
         rows_cleared = b.get_rows_cleared()
         final_height = b.get_num_rows()
         num_holes = b.get_num_holes()
     elif args.method == 2:
-        b, s = tree_get_solution(get_pieces_from_file(args.input), args.width,
+        print "Getting pieces from {0}".format(args.input)
+        p = get_pieces_from_file(args.input)
+        print "Calculating solution"
+        b, s = tree_get_solution(p, args.width,
                           args.buffer_size, args.visualise)
+        print "Writting solution to {0}".format(args.output)
         write_solution_to_file(s, args.output)
-        
         rows_cleared = b.get_rows_cleared()
         final_height = b.get_num_rows()
         num_holes = b.get_num_holes()
+    else:
+        print "No method selected. Use --method 1 or --method 2"
         
     if args.stats_out:
       out_stats(args.stats_out, args.input, args.width, args.buffer_size, args.method, rows_cleared, final_height, num_holes)
