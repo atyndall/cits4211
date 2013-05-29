@@ -1,7 +1,10 @@
 CITS4211 Tetris AI
 ========
 
+Completed 29/05/2013.
+
 An artificial intelligence that uses pre-generated placement decision trees to play a game of Tetris.
+`solve.py` is the main file.
 Refer to the included PDF report for more information.
 
 This solution is written in Python 2.7, and the successful import of pre-generated PDTs cannot be guaranteed on a Python versions < 2.7.4, >= 3.
