@@ -14,7 +14,7 @@ from math import factorial
 from rect import Rect
 from tree import *
 from helper import *
-import cPickle as pickle
+import pickle
 
 WIDTH = 4   # Default width
 HEIGHT = 4  # Default height
